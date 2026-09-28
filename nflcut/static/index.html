@@ -11,6 +11,36 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Opening: the scissors cut the line, then the screen splits along it. -->
+<div id="intro" aria-hidden="true" hidden>
+  <div class="half top"></div>
+  <div class="half bottom"></div>
+  <div class="seam"></div>
+</div>
+<template id="intro-mark">
+  <svg class="mark" viewBox="0 0 64 64">
+    <defs>
+      <clipPath id="cut-reveal"><rect class="reveal" x="21.5" y="30" width="16.5" height="12"/></clipPath>
+    </defs>
+    <g fill="none" stroke="#F3F5EF" stroke-linecap="round">
+      <path class="ball" pathLength="1" d="M7 36 C16 20 46 20 55 36 C46 52 16 52 7 36 Z" stroke-width="3.6" stroke-linejoin="round"/>
+      <path class="stripe" d="M17 26.5 C15.8 31 15.8 41 17 45.5" stroke-width="3"/>
+      <path class="stripe" d="M45 26.5 C46.2 31 46.2 41 45 45.5" stroke-width="3"/>
+      <path clip-path="url(#cut-reveal)" d="M21.5 36 H38" stroke-width="3.2" stroke-linecap="butt" stroke-dasharray="3.4 2.4"/>
+    </g>
+    <g class="scissors" stroke="#F2D40C" stroke-linecap="round" fill="none">
+      <g class="blade a">
+        <path d="M48.9 21.2 L44.5 29.5 L39.9 39" stroke-width="3.2"/>
+        <circle cx="50.8" cy="17.4" r="4" stroke-width="2.8"/>
+      </g>
+      <g class="blade b">
+        <path d="M53.2 28.6 L44.5 29.5 L35.8 30.6" stroke-width="3.2"/>
+        <circle cx="57.2" cy="28" r="4" stroke-width="2.8"/>
+      </g>
+      <circle cx="44.5" cy="29.5" r="1.3" fill="#1D5A39" stroke="none"/>
+    </g>
+  </svg>
+</template>
 <header class="top">
   <span class="brand"><img src="icon.svg" alt="" width="36" height="36">nflcut</span>
   <nav class="week-nav" aria-label="Semana">
@@ -46,6 +76,7 @@
   </article>
 </template>
 
+<script src="intro.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -278,3 +278,82 @@ video { display: block; width: 100%; max-height: 80vh; background: #000; }
   .shutter, .progress .fill { transition: none; }
   .progress.indeterminate .fill { animation: none; width: 100%; opacity: .5; }
 }
+
+/* ---------- opening animation ---------- */
+
+.intro-playing body { overflow: hidden; }
+
+#intro {
+  --size: min(46vmin, 360px);
+  --seam: 50vh;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  cursor: pointer;
+}
+#intro[hidden] { display: none; }
+
+#intro .half {
+  position: absolute;
+  left: 0; right: 0;
+  height: var(--seam);
+  overflow: hidden;
+  background: var(--turf);
+}
+#intro .top { top: 0; animation: part-up 560ms cubic-bezier(.7, 0, .2, 1) 1.45s forwards; }
+#intro .bottom { top: var(--seam); bottom: 0; height: auto; animation: part-down 560ms cubic-bezier(.7, 0, .2, 1) 1.45s forwards; }
+
+/* The cut line is at y=36 of the 64-unit mark: put it on the seam. */
+#intro .mark {
+  position: absolute;
+  left: calc(50% - var(--size) / 2);
+  width: var(--size);
+  height: var(--size);
+}
+#intro .top .mark { top: calc(var(--seam) - var(--size) * 36 / 64); }
+#intro .bottom .mark { top: calc(var(--size) * -36 / 64); }
+
+/* The seam: the cut carries on across the whole screen. */
+#intro .seam {
+  position: absolute;
+  top: calc(var(--seam) - 1.5px);
+  height: 3px;
+  left: 50%; right: 50%;
+  background: var(--line);
+  animation: seam 260ms ease-out 1.2s forwards, fade 200ms linear 1.55s forwards;
+}
+
+.mark .ball {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 450ms ease-out forwards;
+}
+.mark .stripe { opacity: 0; animation: fade-in 200ms ease-out 300ms forwards; }
+.mark .reveal {
+  width: 0;
+  animation: reveal 750ms linear 450ms forwards;
+}
+.mark .scissors {
+  opacity: 0;
+  transform: translateX(-17px);
+  animation: fade-in 120ms linear 400ms forwards, travel 750ms linear 450ms forwards;
+}
+.mark .blade { transform-origin: 44.5px 29.5px; }
+.mark .blade.a { animation: snip-a 250ms ease-in-out 450ms 3; }
+.mark .blade.b { animation: snip-b 250ms ease-in-out 450ms 3; }
+
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes fade-in { to { opacity: 1; } }
+@keyframes fade { to { opacity: 0; } }
+@keyframes reveal { to { width: 16.5px; } }
+@keyframes travel { to { transform: translateX(0); } }
+@keyframes snip-a { 50% { transform: rotate(9deg); } }
+@keyframes snip-b { 50% { transform: rotate(-9deg); } }
+@keyframes seam { to { left: 0; right: 0; } }
+@keyframes part-up { to { transform: translateY(-100%); } }
+@keyframes part-down { to { transform: translateY(100%); } }
+
+/* Click or key: jump straight to the split. */
+#intro.skip .half, #intro.skip .seam { animation-delay: 0s; animation-duration: 250ms; }
+#intro.skip .mark * { animation: none; opacity: 1; stroke-dashoffset: 0; transform: none; }
+#intro.skip .mark .reveal { width: 16.5px; }
