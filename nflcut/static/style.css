@@ -43,10 +43,14 @@ button { font: inherit; cursor: pointer; }
 }
 
 .brand {
-  font: 800 22px/1 var(--display);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 800 26px/1 var(--display);
   letter-spacing: 0.02em;
-  color: var(--chalk-dim);
+  color: var(--chalk);
 }
+.brand img { border-radius: 8px; box-shadow: 0 0 0 1.5px rgba(243, 245, 239, 0.35); }
 
 .week-nav { display: flex; align-items: center; gap: 12px; }
 
