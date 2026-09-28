@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nflcut",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "nflcut"],
+      "port": 8765
+    }
+  ]
+}

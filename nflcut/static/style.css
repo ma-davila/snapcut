@@ -1,0 +1,276 @@
+:root {
+  --turf: #1d5a39;
+  --turf-mow: #226540;
+  --turf-deep: #133f28;
+  --chalk: #f3f5ef;
+  --chalk-dim: #c9d6cc;
+  --ink: #122219;
+  --ink-soft: #4b5d52;
+  --line: #f2d40c;         /* the yellow first-down line */
+  --error: #b3261e;
+  --radius-card: 6px;
+  --radius-btn: 3px;
+  --display: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --body: "Public Sans", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html { color-scheme: light; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font: 400 16px/1.45 var(--body);
+  color: var(--chalk);
+  background-color: var(--turf);
+  /* mowing stripes, 5 yards each */
+  background-image: repeating-linear-gradient(
+    180deg, var(--turf) 0 140px, var(--turf-mow) 140px 280px);
+  background-attachment: fixed;
+}
+
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--line); outline-offset: 2px; }
+
+/* ---------- header ---------- */
+
+.top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 28px clamp(16px, 4vw, 48px) 8px;
+}
+
+.brand {
+  font: 800 22px/1 var(--display);
+  letter-spacing: 0.02em;
+  color: var(--chalk-dim);
+}
+
+.week-nav { display: flex; align-items: center; gap: 12px; }
+
+.week-nav h1 {
+  margin: 0;
+  min-width: 7ch;
+  text-align: center;
+  font: 900 clamp(44px, 7vw, 76px)/0.9 var(--display);
+  letter-spacing: 0.01em;
+}
+
+.arrow {
+  width: 44px; height: 44px;
+  border: 2px solid var(--chalk-dim);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--chalk);
+  font-size: 26px; line-height: 1;
+}
+.arrow:hover { background: rgba(243, 245, 239, 0.12); }
+.arrow:disabled { opacity: 0.3; cursor: default; }
+
+/* ---------- days ---------- */
+
+main {
+  padding: 8px clamp(16px, 4vw, 48px) 64px;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.day { margin-top: 36px; }
+
+.day h2 {
+  margin: 0 0 14px;
+  padding-bottom: 6px;
+  border-bottom: 3px solid var(--chalk);   /* a yard line */
+  font: 800 28px/1 var(--display);
+  letter-spacing: 0.02em;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+}
+
+.empty { color: var(--chalk-dim); margin-top: 48px; text-align: center; }
+
+/* ---------- card ---------- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--chalk);
+  color: var(--ink);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.net { font-weight: 600; }
+
+.teams {
+  position: relative;
+  padding: 8px 0 4px;
+}
+
+.team {
+  display: grid;
+  grid-template-columns: 10px 64px 1fr 64px;
+  align-items: center;
+  column-gap: 12px;
+  height: 52px;
+}
+
+.swatch { align-self: stretch; background: var(--team, #666); }
+
+.abbr { font: 900 34px/1 var(--display); letter-spacing: 0.01em; }
+
+.name {
+  font-size: 14px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.score {
+  justify-self: end;
+  padding-right: 16px;
+  font: 800 34px/1 var(--display);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+/* Winner styling only once the score is revealed. */
+.card.revealed .team.win .score { color: var(--ink); }
+.card.revealed .team.win .abbr { text-decoration: underline 3px; text-underline-offset: 5px; }
+
+/* The shutter hides both scores until asked. */
+.shutter {
+  position: absolute;
+  top: 8px; right: 0;
+  width: 132px; height: 104px;
+  border: 0;
+  border-radius: 0;
+  background: var(--turf-deep);
+  color: var(--chalk);
+  font: 800 17px/1.1 var(--display);
+  letter-spacing: 0.03em;
+  padding: 0 18px;
+  transition: transform 380ms cubic-bezier(.6,0,.2,1);
+  transform-origin: top;
+}
+.shutter:hover { background: #0f3320; }
+.card.revealed .shutter { transform: scaleY(0); pointer-events: none; }
+.card:not(.final) .shutter { display: none; }
+
+.detail {
+  margin: 0;
+  min-height: 1.4em;
+  padding: 0 16px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  visibility: hidden;
+}
+.card.revealed .detail { visibility: visible; }
+
+/* ---------- actions ---------- */
+
+.action {
+  margin-top: auto;
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: 70px;
+}
+
+.btn {
+  border: 0;
+  border-radius: var(--radius-btn);
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 15px;
+  background: var(--line);
+  color: var(--ink);
+}
+.btn:hover { filter: brightness(0.95); }
+.btn.dark { background: var(--ink); color: var(--chalk); }
+
+.link {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.link:hover { color: var(--ink); }
+
+.muted { font-size: 14px; color: var(--ink-soft); }
+.error { font-size: 14px; color: var(--error); flex-basis: 100%; }
+
+.progress { flex-basis: 100%; }
+.progress .label { font-size: 14px; display: flex; justify-content: space-between; }
+.progress .track {
+  margin-top: 8px;
+  height: 6px;
+  background: #dfe5dc;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress .fill {
+  height: 100%;
+  width: 0;
+  background: var(--line);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+  transition: width 600ms linear;
+}
+.progress.indeterminate .fill {
+  width: 30%;
+  animation: sweep 1.4s ease-in-out infinite;
+}
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+
+/* ---------- player ---------- */
+
+dialog#player {
+  width: min(1200px, 96vw);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: #000;
+  color: var(--chalk);
+}
+dialog#player::backdrop { background: rgba(8, 20, 13, 0.85); }
+.player-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  font: 800 20px/1 var(--display);
+  background: var(--turf-deep);
+}
+.ghost {
+  border: 1px solid var(--chalk-dim);
+  border-radius: var(--radius-btn);
+  background: transparent;
+  color: var(--chalk);
+  padding: 6px 12px;
+  font: 500 14px var(--body);
+}
+video { display: block; width: 100%; max-height: 80vh; background: #000; }
+
+@media (max-width: 560px) {
+  .top { grid-template-columns: 1fr; justify-items: center; gap: 10px; }
+  .team { grid-template-columns: 8px 56px 1fr 56px; }
+  .shutter { width: 116px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shutter, .progress .fill { transition: none; }
+  .progress.indeterminate .fill { animation: none; width: 100%; opacity: .5; }
+}

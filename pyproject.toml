@@ -1,0 +1,20 @@
+[project]
+name = "nflcut"
+version = "0.1.0"
+description = "Spoiler-free NFL highlights, cut down to live plays only"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "numpy>=2.5.3",
+    "scipy>=1.18.1",
+    "uvicorn[standard]>=0.54.0",
+    "yt-dlp>=2026.8.19",
+]
+
+[project.scripts]
+nflcut = "nflcut.server:main"
+nflcut-cut = "nflcut.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
