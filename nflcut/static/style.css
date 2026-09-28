@@ -215,6 +215,10 @@ main {
 .link:hover { color: var(--ink); }
 
 .muted { font-size: 14px; color: var(--ink-soft); }
+.link-btn {
+  border: 0; padding: 0; background: none;
+  font-size: 13px; color: var(--ink); text-decoration: underline;
+}
 .error { font-size: 14px; color: var(--error); flex-basis: 100%; }
 
 .progress { flex-basis: 100%; }

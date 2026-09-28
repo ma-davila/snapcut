@@ -147,7 +147,12 @@ function renderAction(el, g) {
   }
 
   if (!job || !job.stage) {
-    box.append(button("btn", "Generar vídeo", () => generate(g)));
+    if (g.supported) {
+      box.append(button("btn", "Generar vídeo", () => generate(g)));
+    } else {
+      box.append(text("muted", `Aún no sé leer el marcador de ${g.network ?? "esta cadena"}.`));
+      box.append(button("link-btn", "Probar igualmente", () => generate(g)));
+    }
     box.append(ytLink(g));
     return;
   }

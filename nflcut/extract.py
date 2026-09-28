@@ -14,10 +14,11 @@ BUG_SCALE = 4  # downscale factor for the whole scorebug
 # mode "hidden": during a play the clock isn't shown at all (FOX).
 PRESETS = {
     "cbs": {"bug": (370, 608, 540, 77), "clock": (703, 649, 34, 34), "mode": "frozen"},
-    # FOX's down & distance bar changes length with possession, and the clock
-    # sits at its right end, so we grab the whole bar row and align per frame.
-    "fox": {"bug": (350, 604, 570, 76), "clock": (380, 569, 560, 28), "mode": "hidden"},
+    # FOX shows the down & distance bar over the side of the team with the
+    # ball, so its clock sits in one of two places: left bar end or right one.
+    "fox": {"bug": (350, 604, 570, 76), "clock": [(536, 571, 60, 26), (818, 571, 60, 26)], "mode": "hidden"},
     "nbc": {"bug": (330, 634, 620, 36), "clock": (642, 673, 28, 18), "mode": "frozen"},
+    "prime": {"bug": (345, 630, 590, 56), "clock": (684, 661, 34, 24), "mode": "frozen"},
 }
 
 

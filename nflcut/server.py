@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import games
-from .jobs import Jobs
+from .jobs import NETWORK_HINTS, Jobs
 
 STATIC = Path(__file__).parent / "static"
 
@@ -29,6 +29,7 @@ def week(season: int | None = None, seasontype: int | None = None, week: int | N
         v = games.match_video(g, videos, data["week"]) if g["state"] == "post" else None
         g["video"] = v
         g["job"] = jobs.status(g["id"])
+        g["supported"] = (g["network"] or "").upper() in NETWORK_HINTS
     return data
 
 

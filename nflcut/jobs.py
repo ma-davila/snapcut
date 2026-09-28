@@ -13,7 +13,7 @@ from . import cut
 DATA = Path(__file__).resolve().parent.parent / "data"
 
 # ESPN broadcast name -> scorebug preset, used when the logo match is unsure.
-NETWORK_HINTS = {"CBS": "cbs", "FOX": "fox", "NBC": "nbc"}
+NETWORK_HINTS = {"CBS": "cbs", "FOX": "fox", "NBC": "nbc", "PRIME VIDEO": "prime"}
 
 # Share of the progress bar each stage takes.
 STAGES = {"queued": (0.0, 0.0), "downloading": (0.0, 0.45), "analyzing": (0.45, 0.65),
@@ -110,6 +110,8 @@ class Jobs:
         except cut.UnsupportedNetwork:
             raise RuntimeError(f"Aún no sé leer el marcador de {network or 'esta cadena'}.")
 
+        if not result["segments"]:
+            raise RuntimeError("No he encontrado jugadas en el vídeo.")
         self._set(game_id, stage="rendering")
         cut.render(src, result["segments"], d / "cut.mp4",
                    progress=lambda f: self._set(game_id, frac=f))

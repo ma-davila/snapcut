@@ -53,51 +53,47 @@ def frozen_states(crops, min_share=0.03):
 
 
 FOX_TENS = np.load(Path(__file__).parent / "assets" / "digits" / "fox_tens.npz")
-TENS_X = slice(9, 23)   # tens digit inside the aligned FOX clock crop
-HURRY_TAIL = 10.0       # seconds kept from a hidden stretch with no pre-snap clock
-CLOCK_W = 50
+TENS = (slice(5, 22), slice(19, 34))  # tens digit inside a FOX clock crop
+TENS_MAX = 0.22       # binary template distance above which it's no reading at all
+HURRY_TAIL = 10.0     # seconds kept from a hidden stretch with no pre-snap reading
 
 
-def align_fox_clock(strip):
-    """Cut the clock out of the bar row: it's the last CLOCK_W px of the dark
-    bar, which is the first long dark run from the left."""
-    out = np.zeros((len(strip), strip.shape[1], CLOCK_W), np.uint8)
-    bar = (strip < 70).mean(axis=1) > 0.6
-    for i, cols in enumerate(bar):
-        idx = np.flatnonzero(cols)
-        if len(idx) < 40:
-            continue
-        # Split into runs (letters leave gaps) and take the first long one.
-        breaks = np.flatnonzero(np.diff(idx) > 20)
-        starts = np.r_[idx[0], idx[breaks + 1]]
-        ends = np.r_[idx[breaks], idx[-1]]
-        long_runs = [(a, b) for a, b in zip(starts, ends) if b - a > 100]
-        if not long_runs:
-            continue
-        e = min(long_runs[0][1] + 3, strip.shape[2])
-        if e >= CLOCK_W:
-            out[i] = strip[i, :, e - CLOCK_W:e]
-    return out
+def fox_readings(crops):
+    """Per frame: "high" (:3x), "low" (:0x-:2x), "junk" (other text) or None.
+    Digits are white on the team-coloured bar, so compare binarised crops and
+    the bar colour doesn't matter."""
+    tens = (crops[:, TENS[0], TENS[1]] > 200).astype(np.float32)
+    best = np.full(len(crops), None, dtype=object)
+    best_d = np.full(len(crops), np.inf)
+    for kind in ("high", "low", "junk"):
+        for t in FOX_TENS[kind]:
+            d = np.abs(tens - t).mean(axis=(1, 2))
+            better = d < best_d
+            best[better], best_d[better] = kind, d[better]
+    best[best_d > TENS_MAX] = None
+    return best, best_d
 
 
-def fox_live(clock, present):
+def fox_live(clocks, present):
     """FOX hides the play clock during the play, but also for most of the
     countdown. It shows it twice between plays: right after the whistle
     (:39, :38...) and in the last seconds before the snap (:15...:01). So a
     hidden stretch right after a low reading is the play; right after a :3x
-    reading, or a text banner (flag, penalty), it's dead time."""
-    c = clock.astype(np.float32)
-    dark = (c < 70).mean(axis=(1, 2))
-    bright = (c > 190).mean(axis=(1, 2))
-    shown = (dark > 0.4) & (dark < 0.9) & (bright > 0.02)
-    shown = present & (median_filter(shown.astype(np.uint8), size=int(0.5 * FPS) | 1) > 0)
-    hidden = present & ~shown & (bright <= 0.4)  # bright = yellow FLAG banner
+    reading it's dead time."""
+    # Read both possible clock positions. Only one bar is up at a time, so
+    # prefer whichever side shows digits; the empty side always matches
+    # "junk" closely and must not win.
+    (ra, da), (rb, db) = (fox_readings(c) for c in clocks)
+    digit_a, digit_b = np.isin(ra, ["high", "low"]), np.isin(rb, ["high", "low"])
+    use_b = (digit_b & ~digit_a) | (digit_a & digit_b & (db < da))
+    reading = np.where(use_b, rb, ra)
+    bright = np.maximum(*[(c > 180).mean(axis=(1, 2)) for c in clocks])
 
-    tens = c[:, :, TENS_X]
-
-    def reading(i):
-        d = {k: min(np.abs(tens[i] - t).mean() for t in FOX_TENS[k]) for k in ("high", "low", "junk")}
-        return min(d, key=d.get)
+    digit = np.isin(reading, ["high", "low"]).astype(np.uint8)
+    shown = present & (median_filter(digit, size=int(0.5 * FPS) | 1) > 0)
+    # Anything else with the scorebug up counts as the clock being hidden,
+    # except a mostly bright bar: the yellow FLAG banner after a play.
+    hidden = present & ~shown & (bright <= 0.5)
 
     def runs(mask):
         out, i = [], 0
@@ -113,28 +109,26 @@ def fox_live(clock, present):
         return out
 
     # Label each shown run by its first and last readings: low means the snap
-    # is coming; high (:3x) or a text banner means a play just ended.
-    # Text that isn't the clock (the tail of "1ST & GOAL", "FG ATTEMPT") at the
-    # bar's end means the clock is hidden, not shown.
-    junk = np.array([shown[i] and reading(i) == "junk" for i in range(len(c))])
-    shown &= ~junk
-    hidden |= present & junk
+    # is coming; high (:3x) means a play just ended.
     starts, ends = {}, {}
     for a, b in runs(shown):
-        first = [reading(i) for i in range(a, min(b, a + 5))]
-        last = [reading(i) for i in range(max(a, b - 5), b)]
+        first = [r for r in reading[a:min(b, a + 5)] if r in ("high", "low")]
+        last = [r for r in reading[max(a, b - 5):b] if r in ("high", "low")]
         starts[a] = "pre" if first.count("low") > len(first) / 2 else "post"
         ends[b] = "pre" if last.count("low") > len(last) / 2 else "post"
 
-    live = np.zeros(len(c), bool)
+    live = np.zeros(len(present), bool)
     gap = int(0.5 * FPS)
     tail = int(HURRY_TAIL * FPS)
     for a, b in runs(hidden):
         prev = next((ends[e] for e in range(a, max(0, a - gap) - 1, -1) if e in ends), None)
-        nxt = next((starts[s] for s in range(b, min(len(c), b + gap) + 1) if s in starts), None)
+        nxt = next((starts[s] for s in range(b, min(len(present), b + gap) + 1) if s in starts), None)
         if prev == "pre":
             live[a:b] = True
-        elif prev is None and nxt == "post":
+        elif nxt == "post":
+            # The clock reset to :39 right after this stretch, so a play just
+            # ended in it even though no pre-snap reading came first (kickoffs,
+            # hurry-up snaps). Keep its last few seconds.
             live[max(a, b - tail):b] = True
     return live
 
@@ -227,6 +221,10 @@ class UnsupportedNetwork(Exception):
     pass
 
 
+class NoPlays(Exception):
+    pass
+
+
 def probe_duration(src):
     return float(subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(src)],
@@ -234,6 +232,8 @@ def probe_duration(src):
 
 
 def render(src, segs, dst, progress=None):
+    if not segs:
+        raise NoPlays("No plays found in this video")
     parts = []
     for k, (a, b) in enumerate(segs):
         d = b - a
@@ -277,11 +277,16 @@ def analyze(src, network=None, log=print):
     network = network or detected
     log(f"network: {network} (logo match: {', '.join(f'{k} {v:.0f}' for k, v in scores.items())})")
     preset = PRESETS[network]
-    clock, bug = read_crops(src, preset["clock"]), read_crops(src, preset["bug"], BUG_SCALE)
+    bug = read_crops(src, preset["bug"], BUG_SCALE)
     if preset["mode"] == "hidden":
-        clock = align_fox_clock(clock)
-    n = min(len(clock), len(bug))
-    segs, whistles = segments(live_mask(clock[:n], bug[:n], preset["mode"]), duration, load_audio(src))
+        clocks = [read_crops(src, r) for r in preset["clock"]]
+        n = min(len(bug), *map(len, clocks))
+        mask = live_mask([c[:n] for c in clocks], bug[:n], "hidden")
+    else:
+        clock = read_crops(src, preset["clock"])
+        n = min(len(clock), len(bug))
+        mask = live_mask(clock[:n], bug[:n])
+    segs, whistles = segments(mask, duration, load_audio(src))
     kept = sum(b - a for a, b in segs)
     log(f"{len(segs)} plays ({whistles} cut on the whistle), "
         f"{kept / 60:.1f} of {duration / 60:.1f} min")
