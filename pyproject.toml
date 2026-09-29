@@ -1,7 +1,7 @@
 [project]
-name = "nflcut"
+name = "snapcut"
 version = "0.1.0"
-description = "Spoiler-free NFL highlights, cut down to live plays only"
+description = "Spoiler-free American football highlights, cut down to live plays only"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
@@ -12,8 +12,8 @@ dependencies = [
 ]
 
 [project.scripts]
-nflcut = "nflcut.server:main"
-nflcut-cut = "nflcut.cli:main"
+snapcut = "snapcut.server:main"
+snapcut-cut = "snapcut.cli:main"
 
 [build-system]
 requires = ["hatchling"]

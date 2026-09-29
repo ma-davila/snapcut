@@ -1,8 +1,8 @@
-# nflcut
+# Snapcut
 
-Spoiler-free NFL highlights, cut down to live plays only.
+Spoiler-free American football highlights, cut down to live plays only.
 
-The official NFL YouTube highlights run 15–20 minutes. nflcut keeps only the
+Official game highlights on YouTube run 15–20 minutes. Snapcut keeps only the
 stretch from the snap to the whistle and drops replays, celebrations and the
 dead time between plays, which usually leaves 6–9 minutes.
 
@@ -12,7 +12,7 @@ It runs locally and is meant for personal use: videos are downloaded to
 ## Run
 
 ```bash
-uv run nflcut
+uv run snapcut
 ```
 
 Then open http://127.0.0.1:8765. The page lists the current week's games
@@ -23,7 +23,7 @@ them (about 2 minutes on an M-series Mac).
 From the command line:
 
 ```bash
-uv run nflcut-cut "https://www.youtube.com/watch?v=..." -o cut.mp4
+uv run snapcut-cut "https://www.youtube.com/watch?v=..." -o cut.mp4
 ```
 
 Requires `ffmpeg` on the PATH (the renderer uses `h264_videotoolbox`, so macOS).
@@ -46,20 +46,27 @@ out. The end of each play is cut 0.1 s after the referee's whistle when it's
 audible, or estimated from the clock when it isn't.
 
 The broadcaster is detected from the watermark in the top-right corner
-(`nflcut/assets/logos`), or taken from ESPN's schedule data in the app.
+(`snapcut/assets/logos`), or taken from ESPN's schedule data in the app.
 
 Known gaps: kickoffs are lost on FOX (no play clock is shown around them)
 and on ESPN's opening kickoff (no scorebug); a few seconds of dead time can
 slip in when the clock stays on 40 after a play (penalty announcements).
+
+## Support
+
+Snapcut is free. If it saves you time, the app shows a "buy me a coffee"
+link in the header and when a video ends. It points to `DONATE_URL` in
+`snapcut/server.py` (or the `SNAPCUT_DONATE_URL` environment variable) and is
+hidden while that's empty.
 
 Per-network calibration notes, results and known issues:
 [docs/marcadores.md](docs/marcadores.md).
 
 ## Layout
 
-- `nflcut/cut.py` – live-play detection and rendering
-- `nflcut/extract.py` – per-network scorebug layouts and frame sampling
-- `nflcut/whistle.py` – referee whistle detection
-- `nflcut/games.py` – ESPN schedule and YouTube video matching
-- `nflcut/jobs.py` – background download/cut queue
-- `nflcut/server.py`, `nflcut/static/` – the web app
+- `snapcut/cut.py` – live-play detection and rendering
+- `snapcut/extract.py` – per-network scorebug layouts and frame sampling
+- `snapcut/whistle.py` – referee whistle detection
+- `snapcut/games.py` – ESPN schedule and YouTube video matching
+- `snapcut/jobs.py` – background download/cut queue
+- `snapcut/server.py`, `snapcut/static/` – the web app

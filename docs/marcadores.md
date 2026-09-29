@@ -1,6 +1,6 @@
 # Marcadores por cadena: lo que sabemos
 
-Notas de calibración de nflcut: cómo se comporta el marcador de cada cadena,
+Notas de calibración de Snapcut: cómo se comporta el marcador de cada cadena,
 dónde está cada cosa, qué se probó y qué falló. Si algo deja de funcionar con
 un partido nuevo, empieza por aquí.
 
@@ -24,7 +24,7 @@ llevan marcador, así que caen solas.
 | ESPN / ABC | `frozen` | `(290, 628, 700, 70)` | `(684, 668, 32, 24)` | Eagles-Bears, S3 |
 | FOX | `hidden` | `(350, 604, 570, 76)` | `(536, 571, 60, 26)` y `(818, 571, 60, 26)` | Seahawks-Commanders, Panthers-Browns, Jets-Lions, S3 |
 
-Configuración en `nflcut/extract.py` (`PRESETS`).
+Configuración en `snapcut/extract.py` (`PRESETS`).
 
 ### Modo `frozen` (CBS, NBC, Prime, ESPN)
 
@@ -38,7 +38,7 @@ Configuración en `nflcut/extract.py` (`PRESETS`).
   1 s** después del pitido; en la práctica el pitido llega **entre 1 y 3 s
   antes** del 39, porque el operador arranca el reloj con retraso.
 
-Regla implementada (`live_mask` en `nflcut/cut.py`):
+Regla implementada (`live_mask` en `snapcut/cut.py`):
 
 1. "Congelado" = el recuadro no cambia en 1,2 s. Cambio = más de un 2% de los
    píxeles con diferencia > 40. Con la diferencia media no basta: pasar de 13
@@ -90,19 +90,19 @@ Detalles que costó descubrir:
   gris) es el banner de penalti tras la jugada, no cuenta como oculto.
 - Posiciones de los dígitos dentro del recorte de 60×26: colon en las columnas
   11-17, decenas en 20-33, unidades en 34-47, filas 5-21.
-- Plantillas de las decenas: `nflcut/assets/digits/fox_tens.npz` (`high`,
+- Plantillas de las decenas: `snapcut/assets/digits/fox_tens.npz` (`high`,
   `low`, `junk`), sacadas agrupando recortes de los tres partidos de FOX.
 
 ## Detección de la cadena
 
 - Se compara la **mosca de arriba a la derecha**, región `(1040, 10, 230, 60)`,
-  con una plantilla por cadena en `nflcut/assets/logos/*.npz`. La plantilla es
+  con una plantilla por cadena en `snapcut/assets/logos/*.npz`. La plantilla es
   la mediana de 30-40 fotogramas más una máscara con el 30% de píxeles más
   estables.
 - Distancia con la propia cadena: 6-16. Con las demás: 52-92. Por encima de
   `LOGO_MAX = 35` se considera cadena no soportada.
 - En la app manda la cadena que da ESPN (`broadcasts`), mapeada en
-  `NETWORK_HINTS` (`nflcut/jobs.py`). La mosca solo se usa cuando no hay pista.
+  `NETWORK_HINTS` (`snapcut/jobs.py`). La mosca solo se usa cuando no hay pista.
   **ABC usa los gráficos de ESPN**, así que va al mismo preset.
 - Primer intento descartado: comparar la zona del marcador. Todas las cadenas
   lo tienen en la misma franja inferior y la diferencia queda enterrada en el
@@ -125,7 +125,7 @@ Detalles que costó descubrir:
   FOX, 15/79 en NBC, 33/64 en Prime, 24/73 en ESPN.
 - Aspecto: **dos líneas paralelas hacia 3,8 y 4,0 kHz** (silbato de varias
   cámaras), de 0,15-1 s.
-- Detector actual (`nflcut/whistle.py`): pico tonal en 3-4,6 kHz ≥ 12 dB
+- Detector actual (`snapcut/whistle.py`): pico tonal en 3-4,6 kHz ≥ 12 dB
   sobre la mediana de la banda, estable (deriva ≤ 60 Hz) durante ≥ 0,15 s. Se
   busca solo entre 3 s y 0,3 s antes de que el reloj salga del 40, e
   ignorando los 2 primeros segundos de la jugada. En 10 detecciones revisadas
@@ -201,10 +201,10 @@ Todos de la semana 3 de 2026.
    localizar el marcador y el reloj de posesión.
 3. Mirar el reloj a lo largo de varias jugadas (una tira a 2 fps del recorte).
    ¿Se congela durante la jugada (`frozen`) o desaparece (`hidden`)?
-4. Añadir la entrada en `PRESETS` (`nflcut/extract.py`) y, si ESPN da un nombre
-   de cadena nuevo, en `NETWORK_HINTS` (`nflcut/jobs.py`).
+4. Añadir la entrada en `PRESETS` (`snapcut/extract.py`) y, si ESPN da un nombre
+   de cadena nuevo, en `NETWORK_HINTS` (`snapcut/jobs.py`).
 5. Crear la plantilla de la mosca: mediana de ~40 fotogramas en `LOGO_REGION`
-   más la máscara del 30% más estable, guardada en `nflcut/assets/logos/<cadena>.npz`.
+   más la máscara del 30% más estable, guardada en `snapcut/assets/logos/<cadena>.npz`.
    Comprobar que su distancia es claramente menor que con las demás.
 6. Analizar (`cut.analyze`) y revisar:
    - arranques de una muestra de jugadas: ¿caen en el snap?

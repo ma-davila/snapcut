@@ -54,6 +54,15 @@ button { font: inherit; cursor: pointer; }
 
 .week-nav { display: flex; align-items: center; gap: 12px; }
 
+.donate {
+  justify-self: end;
+  font-size: 14px;
+  color: var(--chalk-dim);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.donate:hover { color: var(--chalk); }
+
 .week-nav h1 {
   margin: 0;
   min-width: 7ch;
@@ -271,6 +280,41 @@ video { display: block; width: 100%; max-height: 86vh; background: #000; }
 .frame.full video { width: 100vw; height: 100vh; max-height: none; object-fit: contain; }
 
 .hud { position: absolute; inset: 0; pointer-events: none; }
+
+/* Shown when the video ends: what was saved, and a coffee. */
+.end-card {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background: rgba(10, 26, 17, 0.86);
+}
+.end-card[hidden] { display: none; }
+.end-card .saved {
+  margin: 0;
+  font: 900 clamp(30px, 5vw, 56px)/1 var(--display);
+  color: var(--chalk);
+}
+.end-card .ask { margin: 0; max-width: 42ch; color: var(--chalk-dim); }
+.end-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 10px; }
+.end-actions .btn { text-decoration: none; }
+.end-actions .ghost {
+  border: 1.5px solid var(--chalk-dim);
+  border-radius: var(--radius-btn);
+  background: transparent;
+  color: var(--chalk);
+  padding: 9px 16px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.end-actions .ghost:hover { background: rgba(243, 245, 239, 0.12); }
+.frame.ended .hud-top { z-index: 4; }
 .hud-top, .hud-bottom {
   position: absolute;
   left: 0; right: 0;
@@ -444,6 +488,7 @@ video { display: block; width: 100%; max-height: 86vh; background: #000; }
 
 @media (max-width: 560px) {
   .top { grid-template-columns: 1fr; justify-items: center; gap: 10px; }
+  .donate { justify-self: center; }
   .team { grid-template-columns: 8px 56px 1fr 56px; }
   .shutter { width: 116px; }
   dialog#player { width: 100vw; border-radius: 0; }

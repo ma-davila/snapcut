@@ -1,6 +1,6 @@
 """Cut a highlight video from the command line.
 
-Usage: uv run nflcut-cut <youtube-url-or-mp4> [-o out.mp4] [--network cbs|fox|nbc]
+Usage: uv run snapcut-cut <youtube-url-or-mp4> [-o out.mp4] [--network cbs|fox|nbc]
 """
 import argparse
 import json

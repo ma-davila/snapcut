@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "nflcut",
+      "name": "snapcut",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "nflcut"],
+      "runtimeArgs": ["run", "snapcut"],
       "port": 8765
     }
   ]

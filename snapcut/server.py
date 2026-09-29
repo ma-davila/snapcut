@@ -1,4 +1,5 @@
 """Local web app: this week's games (scores hidden) and one-click cut highlights."""
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -11,8 +12,16 @@ from .jobs import NETWORK_HINTS, Jobs
 
 STATIC = Path(__file__).parent / "static"
 
-app = FastAPI(title="nflcut")
+# Where the "buy me a coffee" links point. Empty hides them.
+DONATE_URL = os.environ.get("SNAPCUT_DONATE_URL", "")
+
+app = FastAPI(title="snapcut")
 jobs = Jobs()
+
+
+@app.get("/api/config")
+def config():
+    return {"donate_url": DONATE_URL or None}
 
 
 @app.get("/api/week")
@@ -69,4 +78,4 @@ app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
 
 def main():
     import uvicorn
-    uvicorn.run("nflcut.server:app", host="127.0.0.1", port=8765)
+    uvicorn.run("snapcut.server:app", host="127.0.0.1", port=8765)

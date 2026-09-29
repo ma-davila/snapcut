@@ -261,6 +261,8 @@ const clock = (s) => {
 
 async function play(g) {
   const id = ++session;
+  showEndCard(false);
+  saved = g.job && g.job.original && g.job.kept ? g.job.original - g.job.kept : 0;
   $("#player-title").textContent = `${g.away.short} en ${g.home.short}`;
   plays = null;
   layout();
@@ -278,6 +280,38 @@ async function play(g) {
     }
   } catch {}
 }
+
+// ---------- end of video: time saved, and a donation ask ----------
+
+let saved = 0;          // seconds cut from the original
+let donateUrl = null;
+const endCard = $("#end-card");
+
+function showEndCard(on) {
+  endCard.hidden = !on;
+  frame.classList.toggle("ended", on);
+  if (!on) return;
+  const min = Math.round(saved / 60);
+  $(".saved", endCard).textContent = min >= 1
+    ? `Te has ahorrado ${min} ${min === 1 ? "minuto" : "minutos"}.`
+    : "Fin del partido.";
+  $(".ask", endCard).hidden = !donateUrl;
+  $("#end-donate").hidden = !donateUrl;
+  if (donateUrl) $("#end-donate").href = donateUrl;
+}
+
+video.addEventListener("ended", () => showEndCard(true));
+video.addEventListener("seeking", () => { if (!video.ended) showEndCard(false); });
+video.addEventListener("play", () => showEndCard(false));
+$("#end-replay").addEventListener("click", () => { seek(0); video.play().catch(() => {}); });
+
+fetch("/api/config").then((r) => r.json()).then((c) => {
+  donateUrl = c.donate_url;
+  if (!donateUrl) return;
+  const a = $("#donate");
+  a.href = donateUrl;
+  a.hidden = false;
+}).catch(() => {});
 
 function closePlayer() {
   session++;
