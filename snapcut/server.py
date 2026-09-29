@@ -70,6 +70,7 @@ def media(game_id: str):
     path = jobs.dir(game_id) / "cut.mp4"
     if not game_id.isdigit() or not path.exists():
         raise HTTPException(404)
+    jobs.mark_watched(game_id)
     return FileResponse(path, media_type="video/mp4")
 
 

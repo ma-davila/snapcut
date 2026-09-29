@@ -16,6 +16,14 @@ DATA = Path(__file__).resolve().parent.parent / "data"
 NETWORK_HINTS = {"CBS": "cbs", "FOX": "fox", "NBC": "nbc", "PRIME VIDEO": "prime",
                  "ESPN": "espn", "ABC": "espn", "ESPN2": "espn"}  # ABC carries ESPN's graphics
 
+# Disk housekeeping. The source is deleted as soon as the cut exists; the cut
+# itself goes 24h after it's first opened, or after a week if it never is. The
+# cut points stay, so making it again only needs the download and the render.
+WATCHED_TTL = 24 * 3600
+UNWATCHED_TTL = 7 * 24 * 3600
+STALE_DOWNLOAD_TTL = 2 * 24 * 3600
+PURGE_EVERY = 3600
+
 # Share of the progress bar each stage takes.
 STAGES = {"queued": (0.0, 0.0), "downloading": (0.0, 0.45), "analyzing": (0.45, 0.65),
           "rendering": (0.65, 1.0), "done": (1.0, 1.0)}
@@ -26,21 +34,87 @@ class Jobs:
         self.state = {}
         self.lock = threading.Lock()
         self.queue = queue.Queue()
+        self.watched = set()
         threading.Thread(target=self._worker, daemon=True).start()
+        threading.Thread(target=self._housekeeping, daemon=True).start()
 
     def dir(self, game_id):
         return DATA / str(game_id)
 
-    def status(self, game_id):
-        with self.lock:
-            if game_id in self.state:
-                return dict(self.state[game_id])
+    def _meta(self, game_id):
         meta = self.dir(game_id) / "cut.json"
-        if meta.exists() and (self.dir(game_id) / "cut.mp4").exists():
-            info = json.loads(meta.read_text())
-            info.pop("segments", None)
-            return {"stage": "done", "progress": 1.0, **info}
-        return None
+        return json.loads(meta.read_text()) if meta.exists() else None
+
+    def _write_meta(self, game_id, info):
+        (self.dir(game_id) / "cut.json").write_text(json.dumps(info))
+
+    def status(self, game_id):
+        # Running jobs live in memory; finished ones are read from disk so an
+        # expired cut shows up as such.
+        with self.lock:
+            live = self.state.get(game_id)
+            if live and live["stage"] != "done":
+                return dict(live)
+        info = self._meta(game_id)
+        if not info:
+            return None
+        info.pop("segments", None)
+        if not (self.dir(game_id) / "cut.mp4").exists():
+            return {"stage": "expired", "progress": 0.0, **info}
+        if info.get("watched_at"):
+            info["expires_at"] = info["watched_at"] + WATCHED_TTL
+        return {"stage": "done", "progress": 1.0, **info}
+
+    def mark_watched(self, game_id):
+        """Start the 24h countdown the first time a cut is opened."""
+        if game_id in self.watched:
+            return
+        info = self._meta(game_id)
+        if info and not info.get("watched_at"):
+            info["watched_at"] = round(time.time())
+            self._write_meta(game_id, info)
+        self.watched.add(game_id)
+
+    def purge(self, now=None):
+        now = now or time.time()
+        if not DATA.exists():
+            return
+        for d in DATA.iterdir():
+            if not d.is_dir():
+                continue
+            with self.lock:
+                busy = self.state.get(d.name, {}).get("stage") in ("queued", "downloading", "analyzing", "rendering")
+            if busy:
+                continue
+            cut_mp4, src = d / "cut.mp4", d / "src.mp4"
+            info = self._meta(d.name) or {}
+            if cut_mp4.exists():
+                src.unlink(missing_ok=True)
+                made = info.get("cut_at") or cut_mp4.stat().st_mtime
+                watched = info.get("watched_at")
+                if (watched and now - watched > WATCHED_TTL) or (not watched and now - made > UNWATCHED_TTL):
+                    cut_mp4.unlink(missing_ok=True)
+                    info.pop("watched_at", None)
+                    self._write_meta(d.name, info)
+                    self.watched.discard(d.name)
+                    print(f"purged cut of {d.name}")
+            # Leftovers of failed or interrupted jobs.
+            for f in d.iterdir():
+                if f.name in ("cut.json", "cut.mp4"):
+                    continue
+                if now - f.stat().st_mtime > STALE_DOWNLOAD_TTL:
+                    f.unlink(missing_ok=True)
+            with self.lock:
+                if self.state.get(d.name, {}).get("stage") == "done" and not cut_mp4.exists():
+                    self.state.pop(d.name, None)
+
+    def _housekeeping(self):
+        while True:
+            try:
+                self.purge()
+            except Exception:
+                traceback.print_exc()
+            time.sleep(PURGE_EVERY)
 
     def plays(self, game_id):
         """Start of each play in the cut video, plus the cut's nominal length."""
@@ -55,7 +129,7 @@ class Jobs:
 
     def submit(self, game_id, video_id, network=None):
         current = self.status(game_id)
-        if current and current["stage"] not in ("error",):
+        if current and current["stage"] not in ("error", "expired"):
             return current
         self._set(game_id, stage="queued", progress=0.0, error=None)
         self.queue.put((game_id, video_id, network))
@@ -115,12 +189,18 @@ class Jobs:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
 
-        self._set(game_id, stage="analyzing")
-        hint = NETWORK_HINTS.get((network or "").upper())
-        try:
-            result = cut.analyze(src, network=hint, log=print)
-        except cut.UnsupportedNetwork:
-            raise RuntimeError(f"Aún no sé leer el marcador de {network or 'esta cadena'}.")
+        previous = self._meta(game_id)
+        if previous and previous.get("video_id") == video_id and previous.get("segments"):
+            # Cut points from an earlier run: no need to analyse again.
+            result = {"segments": previous["segments"], "duration": previous["original"],
+                      "kept": previous["kept"], "network": previous["network"]}
+        else:
+            self._set(game_id, stage="analyzing")
+            hint = NETWORK_HINTS.get((network or "").upper())
+            try:
+                result = cut.analyze(src, network=hint, log=print)
+            except cut.UnsupportedNetwork:
+                raise RuntimeError(f"Aún no sé leer el marcador de {network or 'esta cadena'}.")
 
         if not result["segments"]:
             raise RuntimeError("No he encontrado jugadas en el vídeo.")
@@ -135,6 +215,9 @@ class Jobs:
             "network": result["network"],
             "video_id": video_id,
             "took": round(time.time() - started),
+            "cut_at": round(time.time()),
         }
-        (d / "cut.json").write_text(json.dumps({**info, "segments": result["segments"]}))
+        self._write_meta(game_id, {**info, "segments": result["segments"]})
+        self.watched.discard(game_id)
+        src.unlink(missing_ok=True)
         self._set(game_id, stage="done", progress=1.0, **info)
