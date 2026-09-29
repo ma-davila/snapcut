@@ -236,21 +236,257 @@ function poll() {
 // ---------- player ----------
 
 const dlg = $("#player");
+const frame = $(".frame", dlg);
 const video = $("#video");
-function play(g) {
+const timeline = $("#timeline");
+const segsEl = $(".segs", timeline);
+const tip = $(".tip", timeline);
+const REWIND_GRACE = 1.5;  // seconds into a play before ← restarts it instead of going back
+const IDLE_MS = 2500;
+
+let plays = null;   // {starts, duration} from the server, on the cut's nominal clock
+let starts = [0];   // play starts scaled to the real video duration
+let current = -1;
+let session = 0;    // guards against a late /plays reply for a game already closed
+let idleTimer = null;
+let dragging = false;
+
+const clock = (s) => {
+  s = Math.max(0, Math.floor(s || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
+async function play(g) {
+  const id = ++session;
   $("#player-title").textContent = `${g.away.short} en ${g.home.short}`;
+  plays = null;
+  layout();
+  video.volume = load("volume", 1);
+  video.muted = load("muted", false);
   video.src = `/media/${g.id}.mp4`;
   dlg.showModal();
+  wake();
   video.play().catch(() => {});
+  try {
+    const r = await fetch(`/api/games/${g.id}/plays`);
+    if (r.ok && id === session) {
+      plays = await r.json();
+      layout();
+    }
+  } catch {}
 }
+
 function closePlayer() {
+  session++;
   video.pause();
   video.removeAttribute("src");
   video.load();
+  clearTimeout(idleTimer);
+  if (fullscreenElement()) exitFullscreen();
   if (dlg.open) dlg.close();
 }
-$("#player-close").addEventListener("click", closePlayer);
+
+// Frame rounding makes the real video drift a little from the summed
+// segments, so the starts are stretched to fit it.
+function layout() {
+  const dur = video.duration;
+  starts = plays && plays.starts.length && dur
+    ? plays.starts.map((s) => s * dur / plays.duration)
+    : [0];
+  segsEl.innerHTML = "";
+  starts.forEach((s, i) => {
+    const seg = document.createElement("div");
+    seg.className = "seg";
+    const end = starts[i + 1] ?? dur;
+    seg.style.left = `${(s / dur) * 100 || 0}%`;
+    seg.style.width = `${((end - s) / dur) * 100 || 100}%`;
+    segsEl.append(seg);
+  });
+  current = -1;
+  update();
+}
+
+function playAt(t) {
+  let i = 0;
+  while (i + 1 < starts.length && starts[i + 1] <= t + 0.05) i++;
+  return i;
+}
+
+function update() {
+  const dur = video.duration || 0;
+  const t = video.currentTime;
+  const i = playAt(t);
+  const segs = segsEl.children;
+  if (i !== current) {
+    [...segs].forEach((seg, k) => {
+      seg.classList.toggle("current", k === i);
+      seg.style.setProperty("--p", k < i ? "100%" : "0%");
+    });
+    current = i;
+  }
+  const end = starts[i + 1] ?? dur;
+  if (segs[i]) segs[i].style.setProperty("--p", `${Math.min(100, ((t - starts[i]) / (end - starts[i])) * 100 || 0)}%`);
+  $(".head", timeline).style.left = `${dur ? (t / dur) * 100 : 0}%`;
+  $("#p-time").textContent = `${clock(t)} / ${clock(dur)}`;
+  const count = plays && dur ? `Jugada ${i + 1} de ${starts.length}` : "";
+  $("#p-count").textContent = count;
+  timeline.setAttribute("aria-valuemax", Math.round(dur));
+  timeline.setAttribute("aria-valuenow", Math.round(t));
+  timeline.setAttribute("aria-valuetext", `${count ? count + ", " : ""}${clock(t)}`);
+  $("#p-prev").disabled = !dur;
+  $("#p-next").disabled = !dur || i + 1 >= starts.length;
+}
+
+function tick() {
+  update();
+  if (!video.paused) requestAnimationFrame(tick);
+}
+
+function seek(t) {
+  if (!video.duration) return;
+  video.currentTime = Math.min(Math.max(0, t), video.duration - 0.05);
+  update();
+  wake();
+}
+
+function prevPlay() {
+  const i = playAt(video.currentTime);
+  seek(video.currentTime - starts[i] > REWIND_GRACE ? starts[i] : starts[Math.max(0, i - 1)]);
+}
+function nextPlay() {
+  const i = playAt(video.currentTime);
+  if (i + 1 < starts.length) seek(starts[i + 1]);
+}
+
+function togglePlay() {
+  if (video.paused || video.ended) video.play().catch(() => {});
+  else video.pause();
+  wake();
+}
+
+function syncPlaying() {
+  const playing = !video.paused;
+  frame.classList.toggle("playing", playing);
+  $("#p-play").setAttribute("aria-label", playing ? "Pausa (espacio)" : "Reproducir (espacio)");
+  wake();
+  if (playing) requestAnimationFrame(tick);
+}
+
+function syncVolume() {
+  const silent = video.muted || video.volume === 0;
+  frame.classList.toggle("muted", silent);
+  $("#p-vol").value = video.muted ? 0 : video.volume;
+  $("#p-mute").setAttribute("aria-label", silent ? "Activar sonido (M)" : "Silenciar (M)");
+  save("volume", video.volume);
+  save("muted", video.muted);
+}
+function toggleMute() {
+  if (video.muted || video.volume === 0) {
+    video.muted = false;
+    if (video.volume === 0) video.volume = 1;
+  } else {
+    video.muted = true;
+  }
+}
+
+// Safari still needs the prefixed API; iPhone only has fullscreen for the <video> itself.
+const fullscreenElement = () => document.fullscreenElement ?? document.webkitFullscreenElement;
+function exitFullscreen() {
+  (document.exitFullscreen ?? document.webkitExitFullscreen).call(document);
+}
+function toggleFullscreen() {
+  if (fullscreenElement()) return exitFullscreen();
+  const enter = frame.requestFullscreen ?? frame.webkitRequestFullscreen;
+  if (enter) enter.call(frame);
+  else video.webkitEnterFullscreen?.();
+}
+function syncFullscreen() {
+  frame.classList.toggle("full", fullscreenElement() === frame);
+  $("#p-full").setAttribute("aria-label",
+    fullscreenElement() ? "Salir de pantalla completa (F)" : "Pantalla completa (F)");
+}
+
+// Controls fade out while playing and come back on any activity.
+function wake() {
+  frame.classList.remove("idle");
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (!video.paused && !dragging && !frame.matches(":has(.hud-bottom:hover)")) frame.classList.add("idle");
+  }, IDLE_MS);
+}
+
+function timeAtPointer(e) {
+  const r = timeline.getBoundingClientRect();
+  const x = Math.min(Math.max(0, e.clientX - r.left), r.width);
+  return { t: (x / r.width) * (video.duration || 0), x };
+}
+function showTip(e) {
+  if (!video.duration) return;
+  const { t, x } = timeAtPointer(e);
+  const n = plays ? `Jugada ${playAt(t) + 1} · ` : "";
+  tip.textContent = `${n}${clock(t)}`;
+  tip.style.left = `${x}px`;
+  tip.hidden = false;
+}
+
+timeline.addEventListener("pointerdown", (e) => {
+  dragging = true;
+  timeline.setPointerCapture(e.pointerId);
+  seek(timeAtPointer(e).t);
+  showTip(e);
+});
+timeline.addEventListener("pointermove", (e) => {
+  if (dragging) seek(timeAtPointer(e).t);
+  if (dragging || e.pointerType === "mouse") showTip(e);
+});
+timeline.addEventListener("pointerup", () => { dragging = false; });
+timeline.addEventListener("lostpointercapture", () => { dragging = false; tip.hidden = true; });
+timeline.addEventListener("pointerleave", () => { if (!dragging) tip.hidden = true; });
+
+// A tap on a sleeping touch screen only brings the controls back.
+video.addEventListener("pointerup", (e) => {
+  if (e.pointerType !== "mouse" && frame.classList.contains("idle")) return wake();
+  togglePlay();
+});
+video.addEventListener("dblclick", toggleFullscreen);
+frame.addEventListener("pointermove", wake);
+
+video.addEventListener("loadedmetadata", layout);
+video.addEventListener("play", syncPlaying);
+video.addEventListener("pause", syncPlaying);
+video.addEventListener("ended", syncPlaying);
+video.addEventListener("timeupdate", update);
+video.addEventListener("volumechange", syncVolume);
+document.addEventListener("fullscreenchange", syncFullscreen);
+document.addEventListener("webkitfullscreenchange", syncFullscreen);
+
+$("#p-play").addEventListener("click", togglePlay);
+$("#p-prev").addEventListener("click", prevPlay);
+$("#p-next").addEventListener("click", nextPlay);
+$("#p-mute").addEventListener("click", toggleMute);
+$("#p-full").addEventListener("click", toggleFullscreen);
+$("#p-close").addEventListener("click", closePlayer);
+$("#p-vol").addEventListener("input", (e) => {
+  video.volume = Number(e.target.value);
+  video.muted = video.volume === 0;
+});
 dlg.addEventListener("close", closePlayer);
+
+dlg.addEventListener("keydown", (e) => {
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  const onRange = e.target.type === "range";
+  const act = {
+    " ": togglePlay,
+    ArrowLeft: onRange ? null : prevPlay,
+    ArrowRight: onRange ? null : nextPlay,
+    f: toggleFullscreen,
+    m: toggleMute,
+  }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+  if (!act) return;
+  e.preventDefault();
+  act();
+  wake();
+});
 
 $("#prev").addEventListener("click", () => {
   const n = neighbor(-1);

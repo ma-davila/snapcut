@@ -42,6 +42,17 @@ class Jobs:
             return {"stage": "done", "progress": 1.0, **info}
         return None
 
+    def plays(self, game_id):
+        """Start of each play in the cut video, plus the cut's nominal length."""
+        meta = self.dir(game_id) / "cut.json"
+        if not meta.exists() or not (self.dir(game_id) / "cut.mp4").exists():
+            return None
+        starts, t = [], 0.0
+        for a, b in json.loads(meta.read_text())["segments"]:
+            starts.append(round(t, 3))
+            t += b - a
+        return {"starts": starts, "duration": round(t, 3)}
+
     def submit(self, game_id, video_id, network=None):
         current = self.status(game_id)
         if current and current["stage"] not in ("error",):

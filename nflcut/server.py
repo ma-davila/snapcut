@@ -48,6 +48,14 @@ def job(game_id: str):
     return jobs.status(game_id) or {"stage": None}
 
 
+@app.get("/api/games/{game_id}/plays")
+def plays(game_id: str):
+    info = jobs.plays(game_id) if game_id.isdigit() else None
+    if not info:
+        raise HTTPException(404)
+    return info
+
+
 @app.get("/media/{game_id}.mp4")
 def media(game_id: str):
     path = jobs.dir(game_id) / "cut.mp4"
