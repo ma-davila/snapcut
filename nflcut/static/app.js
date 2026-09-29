@@ -21,7 +21,10 @@ function save(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
-const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+const mmss = (s) => {
+  s = Math.round(s);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
 
 function weekLabel(d) {
   const entry = d.calendar.find((c) => c.seasontype === d.seasontype && c.week === d.week);
