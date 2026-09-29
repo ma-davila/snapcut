@@ -54,10 +54,12 @@ slip in when the clock stays on 40 after a play (penalty announcements).
 
 ## Support
 
-Snapcut is free. If it saves you time, the app shows a "buy me a coffee"
-link in the header and when a video ends. It points to `DONATE_URL` in
-`snapcut/server.py` (or the `SNAPCUT_DONATE_URL` environment variable) and is
-hidden while that's empty.
+Snapcut is free. If it saves you time, you can support it through
+[GitHub Sponsors](https://github.com/sponsors/ma-davila).
+
+The app links there from the header and when a video ends. The link is
+`DONATE_URL` in `snapcut/server.py`; set `SNAPCUT_DONATE_URL` to point it
+elsewhere, or to an empty string to hide it.
 
 Per-network calibration notes, results and known issues:
 [docs/marcadores.md](docs/marcadores.md).

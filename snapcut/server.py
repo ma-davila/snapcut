@@ -13,7 +13,7 @@ from .jobs import NETWORK_HINTS, Jobs
 STATIC = Path(__file__).parent / "static"
 
 # Where the "buy me a coffee" links point. Empty hides them.
-DONATE_URL = os.environ.get("SNAPCUT_DONATE_URL", "")
+DONATE_URL = os.environ.get("SNAPCUT_DONATE_URL", "https://github.com/sponsors/ma-davila")
 
 app = FastAPI(title="snapcut")
 jobs = Jobs()
