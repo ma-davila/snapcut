@@ -9,6 +9,11 @@ dead time between plays, which usually leaves 6–9 minutes.
 It runs locally and is meant for personal use: videos are downloaded to
 `data/` on your machine and never leave it.
 
+> Snapcut is an independent project, not affiliated with or endorsed by any
+> league, team or broadcaster. It doesn't host or distribute any video. You're
+> responsible for how you use it, including YouTube's Terms of Service and the
+> rights of the content owners.
+
 ## Run
 
 ```bash
@@ -72,3 +77,8 @@ Per-network calibration notes, results and known issues:
 - `snapcut/games.py` – ESPN schedule and YouTube video matching
 - `snapcut/jobs.py` – background download/cut queue
 - `snapcut/server.py`, `snapcut/static/` – the web app
+
+## License
+
+Snapcut is free software, released under the
+[GNU General Public License v3.0 or later](LICENSE).
