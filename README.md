@@ -52,6 +52,9 @@ Known gaps: kickoffs are lost on FOX (no play clock is shown around them)
 and on ESPN's opening kickoff (no scorebug); a few seconds of dead time can
 slip in when the clock stays on 40 after a play (penalty announcements).
 
+Per-network calibration notes, results and known issues:
+[docs/marcadores.md](docs/marcadores.md).
+
 ## Layout
 
 - `nflcut/cut.py` – live-play detection and rendering
