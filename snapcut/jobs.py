@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yt_dlp
 
-from . import cut
+from . import cut, cuts
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 
@@ -27,6 +27,33 @@ PURGE_EVERY = 3600
 # Share of the progress bar each stage takes.
 STAGES = {"queued": (0.0, 0.0), "downloading": (0.0, 0.45), "analyzing": (0.45, 0.65),
           "rendering": (0.65, 1.0), "done": (1.0, 1.0)}
+# With the cut points known up front there's no analysis stage.
+FAST_STAGES = {**STAGES, "downloading": (0.0, 0.6), "rendering": (0.6, 1.0)}
+
+
+def download(video_id, outdir, progress=None):
+    """Fetch a video at 720p to <outdir>/src.mp4; progress gets 0..1."""
+    files = []  # video first, then audio: weigh them 90/10 on one bar
+
+    def hook(p):
+        total = p.get("total_bytes") or p.get("total_bytes_estimate")
+        if not progress or p["status"] != "downloading" or not total:
+            return
+        if p["filename"] not in files:
+            files.append(p["filename"])
+        done = p["downloaded_bytes"] / total
+        progress(0.9 * done if files.index(p["filename"]) == 0 else 0.9 + 0.1 * done)
+
+    opts = {
+        "format": "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]",
+        "merge_output_format": "mp4",
+        "outtmpl": str(Path(outdir) / "src.%(ext)s"),
+        "progress_hooks": [hook],
+        "quiet": True, "no_warnings": True, "noprogress": True,
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+    return Path(outdir) / "src.mp4"
 
 
 class Jobs:
@@ -131,21 +158,21 @@ class Jobs:
         current = self.status(game_id)
         if current and current["stage"] not in ("error", "expired"):
             return current
-        self._set(game_id, stage="queued", progress=0.0, error=None)
+        self._set(game_id, stage="queued", progress=0.0, error=None, fast=False)
         self.queue.put((game_id, video_id, network))
         return self.status(game_id)
 
     def _set(self, game_id, stage=None, frac=None, **extra):
         with self.lock:
             s = self.state.setdefault(game_id, {"stage": "queued", "progress": 0.0})
+            s.update(extra)
             if stage:
                 s["stage"] = stage
-            lo, hi = STAGES.get(s["stage"], (0, 1))
+            lo, hi = (FAST_STAGES if s.get("fast") else STAGES).get(s["stage"], (0, 1))
             if frac is not None:
                 s["progress"] = round(lo + (hi - lo) * frac, 3)
             elif stage:
                 s["progress"] = lo
-            s.update(extra)
 
     def _worker(self):
         while True:
@@ -164,43 +191,37 @@ class Jobs:
         src = d / "src.mp4"
         started = time.time()
 
-        if not src.exists():
-            self._set(game_id, stage="downloading")
-
-            files = []  # video first, then audio: weigh them 90/10 on one bar
-
-            def hook(p):
-                total = p.get("total_bytes") or p.get("total_bytes_estimate")
-                if p["status"] != "downloading" or not total:
-                    return
-                if p["filename"] not in files:
-                    files.append(p["filename"])
-                done = p["downloaded_bytes"] / total
-                frac = 0.9 * done if files.index(p["filename"]) == 0 else 0.9 + 0.1 * done
-                self._set(game_id, frac=frac)
-
-            opts = {
-                "format": "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]",
-                "merge_output_format": "mp4",
-                "outtmpl": str(d / "src.%(ext)s"),
-                "progress_hooks": [hook],
-                "quiet": True, "no_warnings": True, "noprogress": True,
-            }
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
-
         previous = self._meta(game_id)
         if previous and previous.get("video_id") == video_id and previous.get("segments"):
             # Cut points from an earlier run: no need to analyse again.
-            result = {"segments": previous["segments"], "duration": previous["original"],
-                      "kept": previous["kept"], "network": previous["network"]}
+            known = {"segments": previous["segments"], "duration": previous["original"],
+                     "network": previous["network"], "source": previous.get("source", "local")}
         else:
-            self._set(game_id, stage="analyzing")
+            published = cuts.video(video_id)
+            known = published and {"segments": published["segments"], "duration": published["duration"],
+                                   "network": published["preset"], "source": "published"}
+        self._set(game_id, fast=bool(known))
+
+        if not src.exists():
+            self._set(game_id, stage="downloading")
+            download(video_id, d, progress=lambda f: self._set(game_id, frac=f))
+
+        if known and known["source"] == "published":
+            duration = cut.probe_duration(src)
+            if not cuts.matches(known, duration):
+                print(f"{game_id}: download is {duration:.1f}s, published cuts are for "
+                      f"{known['duration']:.1f}s; analysing locally")
+                known = None
+        if known:
+            result = {**known, "kept": sum(b - a for a, b in known["segments"])}
+        else:
+            self._set(game_id, stage="analyzing", fast=False)
             hint = NETWORK_HINTS.get((network or "").upper())
             try:
                 result = cut.analyze(src, network=hint, log=print)
             except cut.UnsupportedNetwork:
                 raise RuntimeError(f"Aún no sé leer el marcador de {network or 'esta cadena'}.")
+            result["source"] = "local"
 
         if not result["segments"]:
             raise RuntimeError("No he encontrado jugadas en el vídeo.")
@@ -213,6 +234,7 @@ class Jobs:
             "original": round(result["duration"]),
             "kept": round(result["kept"]),
             "network": result["network"],
+            "source": result["source"],
             "video_id": video_id,
             "took": round(time.time() - started),
             "cut_at": round(time.time()),

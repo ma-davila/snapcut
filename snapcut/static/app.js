@@ -150,7 +150,12 @@ function renderAction(el, g) {
   }
 
   if (!job || !job.stage) {
-    if (g.supported) {
+    if (g.cuts) {
+      // Cut points already published: only the download and the render are left.
+      box.append(button("btn", "Generar vídeo", () => generate(g)));
+      box.append(text("fast", "Rápido"));
+      box.append(text("muted small", "Jugadas ya localizadas: no hay que analizar."));
+    } else if (g.supported) {
       box.append(button("btn", "Generar vídeo", () => generate(g)));
     } else {
       box.append(text("muted", `Aún no sé leer el marcador de ${g.network ?? "esta cadena"}.`));

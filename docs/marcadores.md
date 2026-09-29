@@ -213,6 +213,25 @@ Todos de la semana 3 de 2026.
 7. Probar con al menos **dos partidos con colores de equipo distintos**: FOX
    funcionaba con uno y fallaba con otro.
 
+## Cortes publicados
+
+Lo normal es que la app no analice: descarga el vídeo y lo monta con los
+cortes que publica `snapcut-publish` (ver README). Lo que conviene saber al
+tocar el analizador:
+
+- **Los tiempos son del vídeo original de YouTube**, no del recortado, para
+  poder usarlos también reproduciendo el vídeo incrustado y saltando huecos.
+- **Si un cambio mueve los cortes, sube `ANALYZER_VERSION`** (`snapcut/cut.py`).
+  Va en cada fichero publicado. Los ya publicados no se rehacen solos:
+  `uv run snapcut-publish --force --game <id>` para los que interese.
+- **Comprobación de la duración:** la app compara la duración del vídeo
+  descargado (`ffprobe`) con la publicada y, si difieren en más de 1 s
+  (`DURATION_TOLERANCE`), analiza en local. Con el mismo formato de descarga
+  (720p, `bv*[height<=720][ext=mp4]+ba[ext=m4a]`) coinciden, y
+  los segmentos salen iguales (probado con ARI-SF, S3: diferencias < 1 ms).
+- La cadena publicada (`preset`) es la que se usó al analizar; en la app no se
+  vuelve a detectar.
+
 ## Fuentes de datos
 
 - **Partidos:** API pública de marcadores de ESPN,

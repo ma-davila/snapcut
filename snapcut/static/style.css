@@ -225,6 +225,15 @@ main {
 
 .muted { font-size: 14px; color: var(--ink-soft); }
 .muted.small { font-size: 12px; flex-basis: 100%; margin-top: -4px; }
+.fast {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--turf);
+  border-left: 3px solid var(--line);
+  padding-left: 6px;
+}
 .link-btn {
   border: 0; padding: 0; background: none;
   font-size: 13px; color: var(--ink); text-decoration: underline;

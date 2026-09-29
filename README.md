@@ -23,7 +23,8 @@ uv run snapcut
 Then open http://127.0.0.1:8765. The page lists the current week's games
 (from ESPN's public scoreboard) with scores hidden; click a score panel to
 reveal it. "Generar vídeo" downloads the game's official highlights and cuts
-them (about 2 minutes on an M-series Mac).
+them (about 2 minutes on an M-series Mac, or about 1.5 when the cut points are
+already published; see below).
 
 From the command line:
 
@@ -57,6 +58,95 @@ Known gaps: kickoffs are lost on FOX (no play clock is shown around them)
 and on ESPN's opening kickoff (no scorebug); a few seconds of dead time can
 slip in when the clock stays on 40 after a play (penalty announcements).
 
+## Published cut points
+
+Finding the plays is the slow part, so the maintainer runs the analysis once
+per video and publishes the result as static JSON. Before cutting, the app
+asks for that video's cut points and, if they exist, only downloads and
+renders. The card shows "Rápido" for those games.
+
+The service lives at `CUTS_URL` in `snapcut/cuts.py`
+(`https://ma-davila.github.io/snapcut-cuts/v1`). Set `SNAPCUT_CUTS_URL` to
+point it elsewhere, or to an empty string to always analyse locally. The app
+also analyses locally when the service doesn't answer, has nothing for the
+video, or the downloaded video's length differs from the published one by more
+than a second (the video was replaced).
+
+Layout (all times on the original YouTube video's clock, in seconds):
+
+- `videos/<youtube id>.json`: `video_id`, `game_id` (ESPN), `game`, `season`,
+  `seasontype`, `week`, `network` (ESPN's name), `preset` (scorebug preset),
+  `duration`, `segments` (`[[start, end], ...]`), `analyzer`
+  (`ANALYZER_VERSION` in `snapcut/cut.py`), `published_at`.
+- `weeks/<season>-<seasontype>-<week>.json`: the week's videos with
+  `video_id`, `game_id`, `game`, `network`, `duration`, `analyzer`, `plays`.
+
+No scores or results go into these files.
+
+### Publishing
+
+`snapcut-publish` checks the current and previous week and, for every finished
+game with a highlights video and no published cuts, downloads the video to a
+temporary folder, analyses it, deletes it and writes the JSON. Then it
+commits and pushes. It's idempotent, keeps going when a game fails (retried up
+to 3 times, an hour apart; an unsupported scorebug isn't retried) and runs
+one at a time.
+
+It runs on the maintainer's Mac, not in the cloud: YouTube blocks most
+datacenter IPs, and the analysis needs ffmpeg and a few CPU minutes.
+
+One-time setup:
+
+1. A repo for the site (`ma-davila/snapcut-cuts`) with GitHub Pages serving
+   the `main` branch root, cloned to `~/snapcut-cuts` (or set
+   `SNAPCUT_CUTS_REPO`).
+2. Credentials for the push, never in the repo. Either git's own (the
+   `gh`/keychain credential helper you already use for GitHub), or a
+   fine-grained token with *Contents: read and write* on that repo only, in
+   the macOS keychain (`-w` with no value prompts for it):
+
+   ```bash
+   security add-generic-password -a "$USER" -s snapcut-publish -w
+   ```
+
+   `SNAPCUT_PUBLISH_TOKEN` overrides the keychain. The token is handed to git
+   through the environment, so it isn't written to `.git/config`.
+
+Run it by hand:
+
+```bash
+uv run snapcut-publish                  # everything pending
+uv run snapcut-publish --game 401872952 # one ESPN game
+uv run snapcut-publish --no-push        # write the files, don't commit or push
+```
+
+`--limit N` analyses at most N videos; `--force` redoes videos already
+published or given up on. Failures are kept in
+`~/Library/Application Support/Snapcut/failures.json`.
+
+Schedule it with launchd, every 15 minutes on game nights (Spanish time:
+Thursday 18:00 to Friday 09:00, Sunday 15:00 to Monday 09:00, Monday 22:00 to
+Tuesday 09:00; edit `WINDOWS` in `snapcut/publish.py` for other slots, such as
+late-season Saturdays):
+
+```bash
+uv run snapcut-publish install
+```
+
+This writes `~/Library/LaunchAgents/io.github.ma-davila.snapcut-publish.plist`
+and loads it. It keeps the current shell's `PATH` (for ffmpeg, git and
+yt-dlp's JavaScript runtime), so run it from a terminal where those work. The
+log is `~/Library/Logs/Snapcut/publish.log`. Runs missed while the Mac sleeps
+happen on wake. Run it now, or remove it:
+
+```bash
+launchctl kickstart gui/$(id -u)/io.github.ma-davila.snapcut-publish
+```
+
+```bash
+uv run snapcut-publish uninstall
+```
+
 ## Support
 
 Snapcut is free. If it saves you time, you can support it through
@@ -76,6 +166,8 @@ Per-network calibration notes, results and known issues:
 - `snapcut/whistle.py` – referee whistle detection
 - `snapcut/games.py` – ESPN schedule and YouTube video matching
 - `snapcut/jobs.py` – background download/cut queue
+- `snapcut/cuts.py` – client for the published cut points
+- `snapcut/publish.py` – analyses finished games and publishes their cut points
 - `snapcut/server.py`, `snapcut/static/` – the web app
 
 ## License

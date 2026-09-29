@@ -14,6 +14,9 @@ from scipy.ndimage import median_filter
 from .extract import BUG_SCALE, FPS, PRESETS, bug_distance, detect_network, read_crops
 from .whistle import SR, whistle_onsets
 
+# Bump whenever a change moves the cut points: published cuts carry it.
+ANALYZER_VERSION = 1
+
 CLOCK_CHANGED = 0.02  # share of clock pixels that must flip for a change
 CLOCK_MATCH = 10.0    # mean abs diff for two clock images to be the same state
 STATIC_SPAN = 1.2   # seconds; a counting clock always changes within this
