@@ -251,7 +251,7 @@ def render(src, segs, dst, progress=None):
     proc = subprocess.Popen([
         "ffmpeg", "-loglevel", "error", "-y", "-i", str(src),
         "-filter_complex_script", str(script), "-map", "[v]", "-map", "[a]",
-        "-c:v", "h264_videotoolbox", "-b:v", "5M", "-c:a", "aac", "-b:a", "160k",
+        "-c:v", "h264_videotoolbox", "-b:v", "3M", "-c:a", "aac", "-b:a", "160k",
         "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", str(tmp),
     ], stdout=subprocess.PIPE, text=True)
     for line in proc.stdout:
