@@ -13,7 +13,8 @@ from . import cut
 DATA = Path(__file__).resolve().parent.parent / "data"
 
 # ESPN broadcast name -> scorebug preset, used when the logo match is unsure.
-NETWORK_HINTS = {"CBS": "cbs", "FOX": "fox", "NBC": "nbc", "PRIME VIDEO": "prime"}
+NETWORK_HINTS = {"CBS": "cbs", "FOX": "fox", "NBC": "nbc", "PRIME VIDEO": "prime",
+                 "ESPN": "espn", "ABC": "espn", "ESPN2": "espn"}  # ABC carries ESPN's graphics
 
 # Share of the progress bar each stage takes.
 STAGES = {"queued": (0.0, 0.0), "downloading": (0.0, 0.45), "analyzing": (0.45, 0.65),

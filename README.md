@@ -32,20 +32,25 @@ Requires `ffmpeg` on the PATH (the renderer uses `h264_videotoolbox`, so macOS).
 
 The scorebug's play clock tells when a play is live:
 
-- **CBS, NBC**: the clock counts down before the snap, freezes (on 40, 25, or
-  wherever it was at the snap) while the play runs, and counts down again
-  after the whistle. Live = frozen.
+- **CBS, NBC, ESPN/ABC, Prime Video**: the clock counts down before the snap,
+  freezes (on 40, 25, or wherever it was at the snap) while the play runs,
+  and counts down again after the whistle. Live = frozen.
 - **FOX**: the clock is hidden during the play but also for most of the
   countdown. It shows up right after the whistle (`:39`) and in the last
   seconds before the snap (`:10`…`:01`). A hidden stretch right after a low
-  reading is a play.
+  reading is a play. The bar sits over the side of the team with the ball,
+  so the clock is read at both bar ends.
 
 Replays and celebrations usually drop the scorebug entirely, so they fall
 out. The end of each play is cut 0.1 s after the referee's whistle when it's
 audible, or estimated from the clock when it isn't.
 
 The broadcaster is detected from the watermark in the top-right corner
-(`nflcut/assets/logos`). ESPN/ABC and Prime Video aren't supported yet.
+(`nflcut/assets/logos`), or taken from ESPN's schedule data in the app.
+
+Known gaps: kickoffs are lost on FOX (no play clock is shown around them)
+and on ESPN's opening kickoff (no scorebug); a few seconds of dead time can
+slip in when the clock stays on 40 after a play (penalty announcements).
 
 ## Layout
 
