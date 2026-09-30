@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Menu bar / tray: the logo's ball and scissors, one colour, no background. -->
+  <g fill="none" stroke="#000" stroke-linecap="round">
+    <path d="M5 36 C15 18 47 18 57 36 C47 54 15 54 5 36 Z" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M20 36 H37" stroke-width="4.5" stroke-linecap="butt" stroke-dasharray="4 3"/>
+    <path d="M49 17 L44 28 L38 41" stroke-width="4.5"/>
+    <circle cx="51.5" cy="11.5" r="5" stroke-width="3.8"/>
+  </g>
+</svg>

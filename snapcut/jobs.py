@@ -57,6 +57,9 @@ class Jobs:
         self.state = {}
         self.lock = threading.Lock()
         self.queue = queue.Queue()
+        # Finished cuts, for the desktop app's notifications: team names only.
+        self.events = []
+        self.seq = 0
 
     def start(self):
         threading.Thread(target=self._worker, daemon=True).start()
@@ -145,12 +148,16 @@ class Jobs:
             t += b - a
         return {"starts": starts, "duration": round(t, 3)}
 
-    def submit(self, game_id, video_id, network=None, week=None):
+    def ready_since(self, seq):
+        with self.lock:
+            return {"seq": self.seq, "ready": [e for e in self.events if e["seq"] > seq]}
+
+    def submit(self, game_id, video_id, network=None, week=None, teams=None):
         current = self.status(game_id)
         if current and current["stage"] not in ("error", "expired"):
             return current
         self._set(game_id, stage="queued", progress=0.0, error=None, fast=False)
-        self.queue.put((game_id, video_id, network, week))
+        self.queue.put((game_id, video_id, network, week, teams))
         return self.status(game_id)
 
     def _set(self, game_id, stage=None, frac=None, **extra):
@@ -167,16 +174,16 @@ class Jobs:
 
     def _worker(self):
         while True:
-            game_id, video_id, network, week = self.queue.get()
+            game_id, video_id, network, week, teams = self.queue.get()
             try:
-                self._run(game_id, video_id, network, week)
+                self._run(game_id, video_id, network, week, teams)
             except Exception as e:
                 traceback.print_exc()
                 self._set(game_id, stage="error", error=str(e) or type(e).__name__)
             finally:
                 self.queue.task_done()
 
-    def _run(self, game_id, video_id, network, week=None):
+    def _run(self, game_id, video_id, network, week=None, teams=None):
         d = self.dir(game_id)
         d.mkdir(parents=True, exist_ok=True)
         src = d / "src.mp4"
@@ -230,7 +237,11 @@ class Jobs:
             "took": round(time.time() - started),
             "cut_at": round(time.time()),
             "week": list(week) if week else (previous or {}).get("week"),
+            "teams": teams or (previous or {}).get("teams"),
         }
         self._write_meta(game_id, {**info, "segments": result["segments"]})
         src.unlink(missing_ok=True)
         self._set(game_id, stage="done", progress=1.0, **info)
+        with self.lock:
+            self.seq += 1
+            self.events = [*self.events[-49:], {"seq": self.seq, "game_id": game_id, "teams": info["teams"]}]

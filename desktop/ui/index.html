@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Snapcut</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: grid; place-items: center; text-align: center;
+    font: 16px/1.45 -apple-system, "Segoe UI", sans-serif;
+    color: #f3f5ef; background: #1d5a39;
+  }
+  img { width: 72px; height: 72px; border-radius: 16px; }
+  p { margin: 16px 0 0; color: #c9d6cc; }
+  #error { color: #f3f5ef; max-width: 40ch; }
+</style>
+</head>
+<body>
+<main>
+  <img src="icon.svg" alt="">
+  <p id="status">Arrancando Snapcut…</p>
+  <p id="error" hidden></p>
+</main>
+</body>
+</html>

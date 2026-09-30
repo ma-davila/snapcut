@@ -1,7 +1,7 @@
 # PyInstaller spec for the packaged server; run by desktop/scripts/build-server.sh.
 import os
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, "..", ".."))
 BUILD = os.path.join(ROOT, "desktop", "build")
@@ -15,6 +15,7 @@ datas = [
     (os.path.join(ROOT, "snapcut", "assets"), "snapcut/assets"),
     (os.path.join(BUILD, "THIRD_PARTY_LICENSES.txt"), "."),
     *collect_data_files("yt_dlp_ejs"),
+    *copy_metadata("snapcut"),  # version shown in "Acerca de"
 ]
 
 a = Analysis(

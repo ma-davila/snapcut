@@ -50,17 +50,13 @@ on Windows. `SNAPCUT_DATA` overrides both.
 While the app runs, it checks every 15 minutes for finished games of the
 current week whose highlights are out, and cuts them on its own, one at a
 time. It prefers published cut points (download + render, under a minute) and
-waits up to an hour for them before analysing locally. Set `SNAPCUT_AUTO=0`
-to turn it off.
+waits up to an hour for them before analysing locally. The desktop app's
+menu turns it on and off ("Descarga automática", saved in `settings.json`);
+`SNAPCUT_AUTO=0` forces it off.
 
-To keep it running without a terminal, start it at login with launchd:
-
-```bash
-uv run snapcut-agent install
-```
-
-`uv run snapcut-agent uninstall` removes it. The log is in
-`~/Library/Logs/Snapcut/app.log`.
+To keep it running without a terminal, use the desktop app: it stays in the
+menu bar (or the Windows tray) when its window is closed, and can open at
+login.
 
 Disk: a downloaded video is deleted as soon as its cut exists, and cuts are
 kept for their whole week. When the next week's first game comes in, the
@@ -69,21 +65,37 @@ generar" is fast). At most one week of cuts, about 2–3 GB, sits in `data/`.
 
 ## Desktop app
 
-Work in progress: a desktop app for macOS and Windows that bundles
-everything (the server, ffmpeg, a JavaScript runtime for yt-dlp). Its code
-lives in `desktop/`.
+A desktop app for macOS and Windows that bundles everything (the server,
+ffmpeg, a JavaScript runtime for yt-dlp), in `desktop/`. It's a
+[Tauri](https://tauri.app) shell (`desktop/src-tauri`) around the packaged
+server:
 
-Building the packaged server (on the target platform):
+- the window shows the same page, served by the bundled server on a free
+  local port (the same one each time when it's free, so the page's memory of
+  revealed scores is kept);
+- closing the window keeps Snapcut in the menu bar (tray on Windows), with
+  "Abrir Snapcut", "Descarga automática", "Abrir al iniciar sesión" and
+  "Salir". At login it starts there, without the window;
+- when a game is ready it sends a notification with the teams only;
+- links to other sites open in the browser;
+- the server quits with the app, even if the app crashes (it watches its
+  stdin). The log is `~/Library/Logs/Snapcut/app.log` on macOS and
+  `%LOCALAPPDATA%\Snapcut\logs\app.log` on Windows.
+
+Building it needs [Rust](https://rustup.rs), Node and, on the target
+platform:
 
 ```bash
 desktop/scripts/build-ffmpeg.sh    # static ffmpeg + ffprobe, ~1 min on an M-series Mac
 desktop/scripts/fetch-quickjs.sh   # QuickJS-NG, pinned by checksum
 desktop/scripts/build-server.sh    # PyInstaller; runs the two above if needed
+cd desktop && npm install && npx tauri build --bundles app   # or dmg, nsis
 ```
 
-The result, `desktop/build/dist/snapcut-server/`, runs without uv, Python or
-a system ffmpeg; it listens on a free port, prints `Snapcut: <url>` and keeps
-its files in the user's data folder.
+The packaged server, `desktop/build/dist/snapcut-server/`, runs without uv,
+Python or a system ffmpeg; it prints `Snapcut: <url>` and keeps its files in
+the user's data folder. The app ends up in
+`desktop/src-tauri/target/release/bundle/`.
 
 ffmpeg is built from source with only what Snapcut uses: x264 (encoding),
 dav1d (YouTube serves 720p as AV1), the hardware H.264 encoders
@@ -231,11 +243,11 @@ Per-network calibration notes, results and known issues:
 - `snapcut/games.py` – ESPN schedule and YouTube video matching
 - `snapcut/jobs.py` – background download/cut queue and disk housekeeping
 - `snapcut/autopilot.py` – cuts finished games on its own, clears past weeks
-- `snapcut/agent.py` – launchd agent to run the app at login
 - `snapcut/cuts.py` – client for the published cut points
 - `snapcut/paths.py` – data and log folders, single-instance lock
+- `snapcut/settings.py` – saved settings (background mode on/off)
 - `snapcut/tools.py`, `snapcut/ytdl.py` – ffmpeg, encoder choice, yt-dlp setup
-- `desktop/` – desktop app: build scripts, packaged server
+- `desktop/` – desktop app: Tauri shell (`src-tauri`), packaged server, build scripts
 - `snapcut/publish.py` – analyses finished games and publishes their cut points
 - `snapcut/server.py`, `snapcut/static/` – the web app
 

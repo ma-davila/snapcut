@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Snapcut",
+  "version": "0.1.0",
+  "identifier": "io.github.ma-davila.snapcut",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../build/dist/snapcut-server/": "server/"
+    },
+    "category": "Video",
+    "shortDescription": "Resúmenes de la NFL sin spoilers, solo las jugadas",
+    "copyright": "Snapcut contributors. GPL-3.0-or-later.",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../../LICENSE",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["Spanish", "English"]
+      }
+    }
+  }
+}

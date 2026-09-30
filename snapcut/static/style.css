@@ -262,6 +262,37 @@ main {
 }
 @keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
+/* ---------- about ---------- */
+
+.foot { text-align: center; padding: 0 16px 32px; }
+.foot .donate { background: none; border: 0; padding: 4px; }
+
+dialog#about {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 24px;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--chalk);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+dialog#about::backdrop { background: rgba(8, 20, 13, 0.7); }
+#about h2 { margin: 0 0 8px; font: 800 32px/1 var(--display); }
+#about h2 .muted { font: 400 14px var(--body); }
+#about a { color: var(--ink); }
+#about summary { cursor: pointer; font-weight: 600; }
+#about pre {
+  max-height: 40vh;
+  overflow: auto;
+  padding: 12px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  background: #fff;
+  border-radius: var(--radius-btn);
+}
+#about form { margin-top: 16px; text-align: right; }
+
 /* ---------- player ---------- */
 
 dialog#player {

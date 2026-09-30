@@ -16,7 +16,6 @@ dependencies = [
 snapcut = "snapcut.server:main"
 snapcut-cut = "snapcut.cli:main"
 snapcut-publish = "snapcut.publish:main"
-snapcut-agent = "snapcut.agent:main"
 
 [build-system]
 requires = ["hatchling"]

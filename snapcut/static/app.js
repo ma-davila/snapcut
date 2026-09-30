@@ -222,6 +222,7 @@ async function generate(g) {
       video_id: g.video.id,
       network: g.network,
       week: [data.season, data.seasontype, data.week],
+      teams: `${g.away.short} - ${g.home.short}`,
     }),
   });
   g.job = await r.json();
@@ -338,7 +339,20 @@ video.addEventListener("seeking", () => { if (!video.ended) showEndCard(false); 
 video.addEventListener("play", () => showEndCard(false));
 $("#end-replay").addEventListener("click", () => { seek(0); video.play().catch(() => {}); });
 
+const about = $("#about");
+$("#about-open").addEventListener("click", async () => {
+  about.showModal();
+  const box = $("#about-licenses");
+  if (box.dataset.loaded) return;
+  const r = await fetch("/licenses.txt").catch(() => null);
+  if (!r?.ok) return;
+  $("pre", box).textContent = await r.text();
+  box.dataset.loaded = "1";
+  box.hidden = false;
+});
+
 fetch("/api/config").then((r) => r.json()).then((c) => {
+  if (c.version) $("#about-version").textContent = `versión ${c.version}`;
   donateUrl = c.donate_url;
   if (!donateUrl) return;
   const a = $("#donate");

@@ -108,6 +108,11 @@ def channel_videos():
     return _cached("channel", CACHE_TTL, _channel_videos)
 
 
+def teams(game):
+    """"Chiefs - Dolphins": what a game is called outside the page (notifications)."""
+    return f"{game['away']['short']} - {game['home']['short']}"
+
+
 def match_video(game, videos, week=None):
     """The official highlight video for a game: both team names and "highlights"
     in the title. Titles read "Away vs Home Game Highlights | 2026 NFL Season Week 3"."""

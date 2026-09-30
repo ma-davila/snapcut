@@ -12,7 +12,7 @@ import threading
 import time
 import traceback
 
-from . import cuts, games
+from . import cuts, games, settings
 from .jobs import NETWORK_HINTS
 from .paths import DATA
 
@@ -24,6 +24,7 @@ STATE = DATA / "autopilot.json"
 class Autopilot:
     def __init__(self, jobs):
         self.jobs = jobs
+        self.wake = threading.Event()
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _load(self):
@@ -68,13 +69,16 @@ class Autopilot:
         self._save(state)
         for g, video in ready:
             print(f"autopilot: queueing {g['away']['abbr']}@{g['home']['abbr']} ({video['id']})")
-            self.jobs.submit(g["id"], video["id"], g["network"], week)
+            self.jobs.submit(g["id"], video["id"], g["network"], week, teams=games.teams(g))
         return len(ready)
 
     def _loop(self):
         while True:
             try:
-                self.run_once()
+                if settings.load()["auto"]:
+                    self.run_once()
             except Exception:
                 traceback.print_exc()
-            time.sleep(EVERY)
+            # Switching it on (see server) runs a round right away.
+            self.wake.wait(EVERY)
+            self.wake.clear()

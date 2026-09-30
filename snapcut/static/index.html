@@ -53,6 +53,23 @@
 
 <main id="days" aria-live="polite"></main>
 
+<footer class="foot"><button id="about-open" class="donate" type="button">Acerca de Snapcut</button></footer>
+
+<dialog id="about" aria-labelledby="about-title">
+  <h2 id="about-title">Snapcut <span id="about-version" class="muted"></span></h2>
+  <p>Resúmenes de la NFL sin spoilers, recortados a las jugadas en vivo.</p>
+  <p>Software libre bajo la licencia GPL-3.0 o posterior.
+    <a href="https://github.com/ma-davila/snapcut" target="_blank" rel="noopener">Código fuente</a></p>
+  <p class="muted">Snapcut es un proyecto independiente, sin relación con ninguna liga, equipo ni
+    cadena de televisión. No aloja ni distribuye vídeos.</p>
+  <details id="about-licenses" hidden>
+    <summary>Licencias de terceros</summary>
+    <p class="muted">Incluye ffmpeg, x264, dav1d, QuickJS-NG, Python y otras bibliotecas, cada una con su licencia.</p>
+    <pre></pre>
+  </details>
+  <form method="dialog"><button class="btn dark">Cerrar</button></form>
+</dialog>
+
 <dialog id="player" aria-labelledby="player-title">
   <div class="frame" tabindex="-1" autofocus>
     <video id="video" playsinline preload="auto"></video>
