@@ -18,9 +18,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { runner: macos-15, platform: macos-arm64, bundle: dmg, arch: aarch64 }
-          - { runner: macos-15-intel, platform: macos-x64, bundle: dmg, arch: x64 }
-          - { runner: windows-2025, platform: windows-x64, bundle: nsis, arch: x64 }
+          # macOS builds "app" too: the update bundle is made from it.
+          - { runner: macos-15, platform: macos-arm64, bundles: "app,dmg", installer: dmg, arch: aarch64 }
+          - { runner: macos-15-intel, platform: macos-x64, bundles: "app,dmg", installer: dmg, arch: x64 }
+          - { runner: windows-2025, platform: windows-x64, bundles: nsis, installer: nsis, arch: x64 }
     runs-on: ${{ matrix.runner }}
     defaults:
       run:
@@ -104,14 +105,14 @@ jobs:
             config='{"bundle":{"createUpdaterArtifacts":true}}'
           fi
           npm ci
-          npx tauri build --bundles ${{ matrix.bundle }} --config "$config"
+          npx tauri build --bundles ${{ matrix.bundles }} --config "$config"
 
       - name: Collect
         run: |
           mkdir -p out
           bundle=desktop/src-tauri/target/release/bundle
           version=$(jq -r .version desktop/src-tauri/tauri.conf.json)
-          cp $bundle/${{ matrix.bundle }}/*.{dmg,exe} out/ 2>/dev/null || true
+          cp $bundle/${{ matrix.installer }}/*.{dmg,exe} out/ 2>/dev/null || true
           cp $bundle/nsis/*.exe.sig out/ 2>/dev/null || true
           # The macOS update bundle has no arch in its name; give it one.
           if [ -f $bundle/macos/Snapcut.app.tar.gz.sig ]; then
