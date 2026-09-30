@@ -11,7 +11,13 @@ BIN=$DIST/_internal/bin
 TMP=$(mktemp -d)
 SERVER=""
 # Stop the server first: Windows won't delete files it has open.
-trap '[ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null && wait "$SERVER" 2>/dev/null; rm -rf "$TMP" || true' EXIT
+cleanup() {
+  local status=$?
+  if [ -n "$SERVER" ]; then kill "$SERVER" 2>/dev/null || true; wait "$SERVER" 2>/dev/null || true; fi
+  rm -rf "$TMP" || true
+  exit "$status"
+}
+trap cleanup EXIT
 
 echo "--- ffmpeg"
 "$BIN/ffmpeg$EXE" -hide_banner -version | head -1
