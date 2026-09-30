@@ -9,7 +9,9 @@ EXE=""
 [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* ]] && EXE=.exe
 BIN=$DIST/_internal/bin
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+SERVER=""
+# Stop the server first: Windows won't delete files it has open.
+trap '[ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null && wait "$SERVER" 2>/dev/null; rm -rf "$TMP" || true' EXIT
 
 echo "--- ffmpeg"
 "$BIN/ffmpeg$EXE" -hide_banner -version | head -1
@@ -34,6 +36,7 @@ fi
 
 echo "--- server"
 SNAPCUT_DATA=$TMP/data "$DIST/snapcut-server$EXE" --exit-with-stdin < <(sleep 60) > "$TMP/out.log" 2>&1 &
+SERVER=$!
 for _ in $(seq 60); do grep -q "^Snapcut: " "$TMP/out.log" && break; sleep 1; done
 URL=$(sed -n 's/^Snapcut: //p' "$TMP/out.log" | tr -d '\r')
 [ -n "$URL" ] || { cat "$TMP/out.log"; exit 1; }
