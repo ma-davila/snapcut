@@ -9,7 +9,6 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
-from scipy.ndimage import median_filter
 
 from . import tools
 from .extract import BUG_SCALE, FPS, PRESETS, bug_distance, detect_network, read_crops
@@ -76,6 +75,12 @@ def fox_readings(crops):
             best[better], best_d[better] = kind, d[better]
     best[best_d > TENS_MAX] = None
     return best, best_d
+
+
+def median_filter(x, size):
+    """Running median with mirrored edges, like scipy.ndimage.median_filter."""
+    padded = np.pad(x, size // 2, mode="symmetric")
+    return np.median(np.lib.stride_tricks.sliding_window_view(padded, size), axis=1).astype(x.dtype)
 
 
 def fox_live(clocks, present):
@@ -254,7 +259,7 @@ def render(src, segs, dst, progress=None):
     total = sum(b - a for a, b in segs)
     proc = tools.popen([
         tools.ffmpeg(), "-loglevel", "error", "-y", "-i", str(src),
-        "-filter_complex_script", str(script), "-map", "[v]", "-map", "[a]",
+        "-/filter_complex", str(script), "-map", "[v]", "-map", "[a]",
         *tools.encoder_args(), "-c:a", "aac", "-b:a", "160k",
         "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", str(tmp),
     ], stdout=subprocess.PIPE, text=True)

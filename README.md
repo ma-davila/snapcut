@@ -67,6 +67,37 @@ kept for their whole week. When the next week's first game comes in, the
 previous weeks' cuts are deleted (their cut points stay, so "Volver a
 generar" is fast). At most one week of cuts, about 2–3 GB, sits in `data/`.
 
+## Desktop app
+
+Work in progress: a desktop app for macOS and Windows that bundles
+everything (the server, ffmpeg, a JavaScript runtime for yt-dlp). Its code
+lives in `desktop/`.
+
+Building the packaged server (on the target platform):
+
+```bash
+desktop/scripts/build-ffmpeg.sh    # static ffmpeg + ffprobe, ~1 min on an M-series Mac
+desktop/scripts/fetch-quickjs.sh   # QuickJS-NG, pinned by checksum
+desktop/scripts/build-server.sh    # PyInstaller; runs the two above if needed
+```
+
+The result, `desktop/build/dist/snapcut-server/`, runs without uv, Python or
+a system ffmpeg; it listens on a free port, prints `Snapcut: <url>` and keeps
+its files in the user's data folder.
+
+ffmpeg is built from source with only what Snapcut uses: x264 (encoding),
+dav1d (YouTube serves 720p as AV1), the hardware H.264 encoders
+(VideoToolbox on macOS; NVENC, QSV and AMF on Windows), the MP4 formats and
+the filters the cut needs. It's GPL (because of x264), which fits Snapcut's
+GPL-3.0-or-later. The script also collects the licenses and the exact
+sources that went in (`desktop/build/ffmpeg/sources`), to publish with each
+release. `desktop/scripts/licenses.py` gathers every third-party license
+into `THIRD_PARTY_LICENSES.txt`, shipped inside the app.
+
+yt-dlp needs a JavaScript runtime for YouTube's challenges. The app ships
+QuickJS-NG (1.3 MB) rather than deno (81 MB): solving a new player takes a
+few seconds longer, and yt-dlp caches the result.
+
 ## How the cut works
 
 The scorebug's play clock tells when a play is live:
@@ -204,6 +235,7 @@ Per-network calibration notes, results and known issues:
 - `snapcut/cuts.py` – client for the published cut points
 - `snapcut/paths.py` – data and log folders, single-instance lock
 - `snapcut/tools.py`, `snapcut/ytdl.py` – ffmpeg, encoder choice, yt-dlp setup
+- `desktop/` – desktop app: build scripts, packaged server
 - `snapcut/publish.py` – analyses finished games and publishes their cut points
 - `snapcut/server.py`, `snapcut/static/` – the web app
 

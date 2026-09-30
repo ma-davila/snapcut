@@ -13,3 +13,6 @@ wheels/
 data/
 work/
 *.mp4
+
+# Desktop build output
+desktop/build/

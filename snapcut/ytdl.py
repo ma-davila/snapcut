@@ -2,10 +2,12 @@
 import yt_dlp
 
 from . import tools
+from .paths import DATA
 
 
 def base_opts():
-    opts = {}
+    # Keep yt-dlp's cache (solved YouTube challenges) with the app's data.
+    opts = {"cachedir": str(DATA / "cache" / "yt-dlp")}
     if ffmpeg := tools.which("ffmpeg"):
         opts["ffmpeg_location"] = ffmpeg
     if js := tools.js_runtime():
