@@ -20,7 +20,9 @@ It runs locally and is meant for personal use: videos are downloaded to
 uv run snapcut
 ```
 
-Then open http://127.0.0.1:8765. The page lists the current week's games
+Then open the address it prints (http://127.0.0.1:8765, or another port if
+that one is taken; `--port` picks one). Only one server runs per data folder:
+starting a second one prints the first one's address and quits. The page lists the current week's games
 (from ESPN's public scoreboard) with scores hidden; click a score panel to
 reveal it. "Generar vídeo" downloads the game's official highlights and cuts
 them (about 2 minutes on an M-series Mac, or about 1.5 when the cut points are
@@ -32,7 +34,16 @@ From the command line:
 uv run snapcut-cut "https://www.youtube.com/watch?v=..." -o cut.mp4
 ```
 
-Requires `ffmpeg` on the PATH (the renderer uses `h264_videotoolbox`, so macOS).
+Requires `ffmpeg` and `ffprobe` on the PATH, and a JavaScript runtime for
+yt-dlp's YouTube challenges ([deno](https://deno.com), or Node 22+). The
+renderer picks the best H.264 encoder that passes a test encode:
+`h264_videotoolbox` on macOS, `h264_nvenc`, `h264_qsv` or `h264_amf` on
+Windows with a supported GPU, `libx264` otherwise (`SNAPCUT_ENCODER` forces
+one). Cuts are 3 Mbps.
+
+Files: run from the repo, everything stays in `data/`. The packaged app uses
+`~/Library/Application Support/Snapcut` on macOS and `%LOCALAPPDATA%\Snapcut`
+on Windows. `SNAPCUT_DATA` overrides both.
 
 ## Background mode
 
@@ -144,7 +155,7 @@ uv run snapcut-publish --no-push        # write the files, don't commit or push
 
 `--limit N` analyses at most N videos; `--force` redoes videos already
 published or given up on. Failures are kept in
-`~/Library/Application Support/Snapcut/failures.json`.
+`data/failures.json`.
 
 Schedule it with launchd, every 15 minutes on game nights (Spanish time:
 Thursday 18:00 to Friday 09:00, Sunday 15:00 to Monday 09:00, Monday 22:00 to
@@ -191,6 +202,8 @@ Per-network calibration notes, results and known issues:
 - `snapcut/autopilot.py` – cuts finished games on its own, clears past weeks
 - `snapcut/agent.py` – launchd agent to run the app at login
 - `snapcut/cuts.py` – client for the published cut points
+- `snapcut/paths.py` – data and log folders, single-instance lock
+- `snapcut/tools.py`, `snapcut/ytdl.py` – ffmpeg, encoder choice, yt-dlp setup
 - `snapcut/publish.py` – analyses finished games and publishes their cut points
 - `snapcut/server.py`, `snapcut/static/` – the web app
 

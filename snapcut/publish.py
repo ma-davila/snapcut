@@ -13,7 +13,6 @@ Usage:
 import argparse
 import base64
 import datetime as dt
-import fcntl
 import json
 import logging
 import logging.handlers
@@ -27,13 +26,13 @@ import tempfile
 import time
 from pathlib import Path
 
-from . import cut, games
+from . import cut, games, paths
 from .jobs import NETWORK_HINTS, download
 
 REPO = Path(os.environ.get("SNAPCUT_CUTS_REPO", "~/snapcut-cuts")).expanduser()
 FORMAT = "v1"
-STATE = Path("~/Library/Application Support/Snapcut").expanduser()
-LOGS = Path("~/Library/Logs/Snapcut").expanduser()
+STATE = paths.DATA
+LOGS = paths.LOGS
 KEYCHAIN_SERVICE = "snapcut-publish"
 MAX_ATTEMPTS = 3
 RETRY_AFTER = 3600
@@ -307,13 +306,11 @@ def main():
     if not (args.repo / ".git").exists():
         log.error("%s is not a git clone of the cuts site (set SNAPCUT_CUTS_REPO or --repo)", args.repo)
         return 2
-    STATE.mkdir(parents=True, exist_ok=True)
-    with open(STATE / "publish.lock", "w") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            log.info("another run is in progress")
-            return 0
+    lock = paths.lock(STATE / "publish.lock")
+    if not lock:
+        log.info("another run is in progress")
+        return 0
+    with lock:
         try:
             return run(args)
         except Exception:

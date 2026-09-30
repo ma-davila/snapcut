@@ -5,7 +5,7 @@ import time
 import unicodedata
 import urllib.request
 
-import yt_dlp
+from . import ytdl
 
 SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
 CHANNEL = "https://www.youtube.com/@NFL/videos"
@@ -96,7 +96,7 @@ def fetch_week(season=None, seasontype=None, week=None):
 
 def _channel_videos():
     opts = {"extract_flat": True, "playlistend": CHANNEL_DEPTH, "quiet": True, "no_warnings": True}
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    with ytdl.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(CHANNEL, download=False)
     return [
         {"id": e["id"], "title": e.get("title") or "", "duration": e.get("duration")}

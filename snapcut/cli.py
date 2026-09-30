@@ -6,9 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-import yt_dlp
-
-from . import cut
+from . import cut, ytdl
 from .extract import PRESETS
 
 
@@ -27,7 +25,7 @@ def main():
         src = workdir / "src.mp4"
         opts = {"format": "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]",
                 "merge_output_format": "mp4", "outtmpl": str(workdir / "src.%(ext)s")}
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with ytdl.YoutubeDL(opts) as ydl:
             ydl.download([args.source])
 
     result = cut.analyze(src, network=args.network)

@@ -1,13 +1,19 @@
 """Local web app: this week's games (scores hidden) and one-click cut highlights."""
+import argparse
+import json
 import os
+import socket
+import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import cuts, games
+from . import cuts, games, paths
 from .autopilot import Autopilot
 from .jobs import NETWORK_HINTS, Jobs
 
@@ -19,9 +25,25 @@ DONATE_URL = os.environ.get("SNAPCUT_DONATE_URL", "https://github.com/sponsors/m
 # Cut finished games in the background; SNAPCUT_AUTO=0 turns it off.
 AUTO = os.environ.get("SNAPCUT_AUTO", "1") != "0"
 
-app = FastAPI(title="snapcut")
+# Run from a checkout it keeps the old address when it's free; the packaged
+# app takes any free port and tells the desktop shell which one.
+DEFAULT_PORT = 8765 if paths.DEV else 0
+
 jobs = Jobs()
-autopilot = Autopilot(jobs) if AUTO else None
+autopilot = None
+
+
+@asynccontextmanager
+async def lifespan(app):
+    global autopilot
+    jobs.start()
+    autopilot = Autopilot(jobs) if AUTO else None
+    yield
+
+
+app = FastAPI(title="snapcut", lifespan=lifespan)
+# Only answer requests addressed to this machine (blocks DNS rebinding).
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 
 
 @app.get("/api/config")
@@ -84,6 +106,46 @@ def media(game_id: str):
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
 
 
+def _bind(port):
+    for p in dict.fromkeys([port, 0]):
+        sock = socket.socket()
+        if sys.platform != "win32":
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", p))
+            return sock
+        except OSError:
+            sock.close()
+    raise OSError("no free port")
+
+
 def main():
     import uvicorn
-    uvicorn.run("snapcut.server:app", host="127.0.0.1", port=8765)
+
+    ap = argparse.ArgumentParser(description="Snapcut web app.")
+    ap.add_argument("--port", type=int, default=int(os.environ.get("SNAPCUT_PORT", DEFAULT_PORT)),
+                    help="preferred port; any free one if taken (0: any)")
+    args = ap.parse_args()
+    # The desktop shell reads this output through a pipe.
+    sys.stdout.reconfigure(line_buffering=True)
+
+    # One server per data folder. A second one points at the first and quits;
+    # the desktop shell reads the same line.
+    running = paths.DATA / "server.json"
+    lock = paths.lock(paths.DATA / "server.lock")
+    if not lock:
+        try:
+            print(f"Snapcut: {json.loads(running.read_text())['url']}", flush=True)
+            return 0
+        except (OSError, ValueError, KeyError):
+            print("Snapcut is already starting", file=sys.stderr)
+            return 1
+
+    sock = _bind(args.port)
+    url = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    running.write_text(json.dumps({"url": url, "pid": os.getpid()}))
+    print(f"Snapcut: {url}", flush=True)
+    try:
+        uvicorn.Server(uvicorn.Config(app, log_level="warning")).run(sockets=[sock])
+    finally:
+        running.unlink(missing_ok=True)

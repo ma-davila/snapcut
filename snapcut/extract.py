@@ -1,8 +1,9 @@
 """Scorebug layouts per network, network detection, and per-frame crop extraction."""
-import subprocess
 from pathlib import Path
 
 import numpy as np
+
+from . import tools
 
 FPS = 10
 BUG_SCALE = 4  # downscale factor for the whole scorebug
@@ -27,11 +28,11 @@ def read_crops(src, region, scale=1, fps=FPS):
     x, y, w, h = region
     ow, oh = w // scale, h // scale
     cmd = [
-        "ffmpeg", "-loglevel", "error", "-i", str(src),
+        tools.ffmpeg(), "-loglevel", "error", "-i", str(src),
         "-vf", f"fps={fps},scale=1280:720,crop={w}:{h}:{x}:{y},scale={ow}:{oh}",
         "-f", "rawvideo", "-pix_fmt", "gray", "-",
     ]
-    raw = subprocess.run(cmd, capture_output=True, check=True).stdout
+    raw = tools.run(cmd, capture_output=True, check=True).stdout
     return np.frombuffer(raw, np.uint8).reshape(-1, oh, ow)
 
 
@@ -39,8 +40,8 @@ def sample_frames(src, duration, n=60):
     """Grayscale 1280x720 frames at n evenly spaced timestamps (fast seeks)."""
     frames = []
     for t in np.linspace(duration * 0.05, duration * 0.95, n):
-        raw = subprocess.run([
-            "ffmpeg", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", str(src), "-frames:v", "1",
+        raw = tools.run([
+            tools.ffmpeg(), "-loglevel", "error", "-ss", f"{t:.2f}", "-i", str(src), "-frames:v", "1",
             "-vf", "scale=1280:720", "-f", "rawvideo", "-pix_fmt", "gray", "-",
         ], capture_output=True, check=True).stdout
         frames.append(np.frombuffer(raw, np.uint8).reshape(720, 1280))

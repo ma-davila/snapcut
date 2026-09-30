@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 from scipy.ndimage import median_filter
 
+from . import tools
 from .extract import BUG_SCALE, FPS, PRESETS, bug_distance, detect_network, read_crops
 from .whistle import SR, whistle_onsets
 
@@ -211,8 +212,8 @@ def segments(mask, duration, audio=None):
 
 
 def load_audio(src):
-    raw = subprocess.run(
-        ["ffmpeg", "-loglevel", "error", "-i", str(src), "-ac", "1", "-ar", str(SR), "-f", "s16le", "-"],
+    raw = tools.run(
+        [tools.ffmpeg(), "-loglevel", "error", "-i", str(src), "-ac", "1", "-ar", str(SR), "-f", "s16le", "-"],
         capture_output=True, check=True).stdout
     return np.frombuffer(raw, np.int16).astype(np.float32) / 32768
 
@@ -229,8 +230,8 @@ class NoPlays(Exception):
 
 
 def probe_duration(src):
-    return float(subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(src)],
+    return float(tools.run(
+        [tools.ffprobe(), "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(src)],
         capture_output=True, text=True, check=True).stdout)
 
 
@@ -251,10 +252,10 @@ def render(src, segs, dst, progress=None):
     script.write_text(graph)
     tmp = Path(dst).with_suffix(".part.mp4")
     total = sum(b - a for a, b in segs)
-    proc = subprocess.Popen([
-        "ffmpeg", "-loglevel", "error", "-y", "-i", str(src),
+    proc = tools.popen([
+        tools.ffmpeg(), "-loglevel", "error", "-y", "-i", str(src),
         "-filter_complex_script", str(script), "-map", "[v]", "-map", "[a]",
-        "-c:v", "h264_videotoolbox", "-b:v", "3M", "-c:a", "aac", "-b:a", "160k",
+        *tools.encoder_args(), "-c:a", "aac", "-b:a", "160k",
         "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", str(tmp),
     ], stdout=subprocess.PIPE, text=True)
     for line in proc.stdout:

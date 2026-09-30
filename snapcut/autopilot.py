@@ -13,7 +13,8 @@ import time
 import traceback
 
 from . import cuts, games
-from .jobs import DATA, NETWORK_HINTS
+from .jobs import NETWORK_HINTS
+from .paths import DATA
 
 EVERY = 15 * 60
 WAIT_FOR_CUTS = 60 * 60

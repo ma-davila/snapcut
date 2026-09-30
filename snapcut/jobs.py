@@ -6,11 +6,8 @@ import time
 import traceback
 from pathlib import Path
 
-import yt_dlp
-
-from . import cut, cuts
-
-DATA = Path(__file__).resolve().parent.parent / "data"
+from . import cut, cuts, ytdl
+from .paths import DATA
 
 # ESPN broadcast name -> scorebug preset, used when the logo match is unsure.
 NETWORK_HINTS = {"CBS": "cbs", "FOX": "fox", "NBC": "nbc", "PRIME VIDEO": "prime",
@@ -50,7 +47,7 @@ def download(video_id, outdir, progress=None):
         "progress_hooks": [hook],
         "quiet": True, "no_warnings": True, "noprogress": True,
     }
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    with ytdl.YoutubeDL(opts) as ydl:
         ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
     return Path(outdir) / "src.mp4"
 
@@ -60,11 +57,17 @@ class Jobs:
         self.state = {}
         self.lock = threading.Lock()
         self.queue = queue.Queue()
+
+    def start(self):
         threading.Thread(target=self._worker, daemon=True).start()
         threading.Thread(target=self._housekeeping, daemon=True).start()
 
     def dir(self, game_id):
         return DATA / str(game_id)
+
+    def _game_dirs(self):
+        # Game folders are named by ESPN id; leave everything else in DATA alone.
+        return [d for d in DATA.iterdir() if d.is_dir() and d.name.isdigit()] if DATA.exists() else []
 
     def _meta(self, game_id):
         meta = self.dir(game_id) / "cut.json"
@@ -94,9 +97,7 @@ class Jobs:
 
     def purge_weeks(self, keep):
         """Delete the cuts of every week but `keep` ([season, seasontype, week])."""
-        if not DATA.exists():
-            return
-        for d in DATA.iterdir():
+        for d in self._game_dirs():
             cut_mp4 = d / "cut.mp4"
             if not cut_mp4.exists() or self.busy(d.name):
                 continue
@@ -109,11 +110,7 @@ class Jobs:
 
     def purge(self, now=None):
         now = now or time.time()
-        if not DATA.exists():
-            return
-        for d in DATA.iterdir():
-            if not d.is_dir():
-                continue
+        for d in self._game_dirs():
             if self.busy(d.name):
                 continue
             cut_mp4, src = d / "cut.mp4", d / "src.mp4"
