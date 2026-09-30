@@ -1,0 +1,132 @@
+# Builds the desktop app for macOS (Apple Silicon, Intel) and Windows.
+# A v* tag publishes the installers as a draft release; any other run
+# (manual, or a push to desktop-ci) only keeps them as workflow artifacts.
+name: Desktop app
+
+on:
+  push:
+    tags: ["v*"]
+    branches: [desktop-ci]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15, platform: macos-arm64, bundle: dmg }
+          - { runner: macos-15-intel, platform: macos-x64, bundle: dmg }
+          - { runner: windows-2025, platform: windows-x64, bundle: nsis }
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(jq -r .version desktop/src-tauri/tauri.conf.json)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME but app version $version (desktop/scripts/set-version.sh)"; exit 1; }
+
+      - uses: astral-sh/setup-uv@v10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      # ffmpeg only changes with its build script: build it once per platform.
+      - uses: actions/cache@v6
+        id: ffmpeg
+        with:
+          path: desktop/build/ffmpeg
+          key: ffmpeg-${{ matrix.platform }}-${{ hashFiles('desktop/scripts/build-ffmpeg.sh') }}
+
+      - name: Build ffmpeg (macOS)
+        if: runner.os == 'macOS' && steps.ffmpeg.outputs.cache-hit != 'true'
+        run: |
+          [ "$(uname -m)" = x86_64 ] && brew install nasm
+          desktop/scripts/build-ffmpeg.sh
+
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows' && steps.ffmpeg.outputs.cache-hit != 'true'
+        with:
+          msystem: MINGW64
+          install: >-
+            git make nasm diffutils
+            mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-meson mingw-w64-x86_64-ninja mingw-w64-x86_64-pkgconf
+      - name: Build ffmpeg (Windows)
+        if: runner.os == 'Windows' && steps.ffmpeg.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: desktop/scripts/build-ffmpeg.sh
+
+      - name: Package the server
+        run: desktop/scripts/build-server.sh
+
+      - name: Smoke test
+        run: desktop/scripts/smoke-test.sh
+
+      - name: Build the app
+        working-directory: desktop
+        env:
+          # Signing, when the secrets exist (see README). Without them macOS
+          # gets an ad-hoc signature and Windows an unsigned installer.
+          SECRET_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          SECRET_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          SECRET_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          SECRET_APPLE_ID: ${{ secrets.APPLE_ID }}
+          SECRET_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          SECRET_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Tauri treats a set-but-empty variable as set: export only real secrets.
+          for name in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            value=$(printenv "SECRET_$name" || true)
+            [ -n "$value" ] && export "$name=$value"
+          done
+          export APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--}
+          npm ci
+          npx tauri build --bundles ${{ matrix.bundle }}
+
+      - name: Collect
+        run: |
+          mkdir -p out
+          cp desktop/src-tauri/target/release/bundle/${{ matrix.bundle }}/*.{dmg,exe} out/ 2>/dev/null || true
+          tar -czf out/ffmpeg-sources-${{ matrix.platform }}.tar.gz -C desktop/build/ffmpeg sources BUILD.txt
+          ls -l out
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: snapcut-${{ matrix.platform }}
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: out
+          merge-multiple: true
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l out
+          gh release create "$GITHUB_REF_NAME" out/* --draft --verify-tag \
+            --title "Snapcut ${GITHUB_REF_NAME#v}" --notes-file desktop/RELEASE_NOTES.md

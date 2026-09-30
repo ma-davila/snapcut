@@ -11,6 +11,7 @@ EXE=""
 
 cd "$DESKTOP/.."
 uv run python desktop/scripts/licenses.py desktop/build/THIRD_PARTY_LICENSES.txt \
+  --cargo desktop/src-tauri/Cargo.toml \
   desktop/build/ffmpeg/licenses desktop/build/quickjs/licenses
 uv run --group desktop pyinstaller --noconfirm --clean --log-level WARN \
   --distpath desktop/build/dist --workpath desktop/build/pyinstaller desktop/server/snapcut-server.spec

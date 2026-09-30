@@ -42,8 +42,9 @@ Windows with a supported GPU, `libx264` otherwise (`SNAPCUT_ENCODER` forces
 one). Cuts are 3 Mbps.
 
 Files: run from the repo, everything stays in `data/`. The packaged app uses
-`~/Library/Application Support/Snapcut` on macOS and `%LOCALAPPDATA%\Snapcut`
-on Windows. `SNAPCUT_DATA` overrides both.
+`~/Library/Application Support/Snapcut` on macOS and
+`%LOCALAPPDATA%\Snapcut\data` on Windows (the program itself is installed in
+`%LOCALAPPDATA%\Snapcut`). `SNAPCUT_DATA` overrides both.
 
 ## Background mode
 
@@ -80,7 +81,7 @@ server:
 - links to other sites open in the browser;
 - the server quits with the app, even if the app crashes (it watches its
   stdin). The log is `~/Library/Logs/Snapcut/app.log` on macOS and
-  `%LOCALAPPDATA%\Snapcut\logs\app.log` on Windows.
+  `%LOCALAPPDATA%\Snapcut\data\logs\app.log` on Windows.
 
 Building it needs [Rust](https://rustup.rs), Node and, on the target
 platform:
@@ -96,6 +97,40 @@ The packaged server, `desktop/build/dist/snapcut-server/`, runs without uv,
 Python or a system ffmpeg; it prints `Snapcut: <url>` and keeps its files in
 the user's data folder. The app ends up in
 `desktop/src-tauri/target/release/bundle/`.
+
+`desktop/scripts/smoke-test.sh` checks a packaged server: it starts from a
+bare environment, its ffmpeg encodes and extracts audio, QuickJS runs, and
+nothing links outside the system.
+
+### Releases
+
+`.github/workflows/desktop.yml` builds the macOS (Apple Silicon and Intel)
+and Windows installers on GitHub's runners and runs the smoke test on each.
+To release:
+
+```bash
+desktop/scripts/set-version.sh 0.2.0   # pyproject, Cargo.toml, tauri.conf.json
+git commit -am "Snapcut 0.2.0" && git tag v0.2.0 && git push --follow-tags
+```
+
+The tag builds everything and creates a **draft** release with the `.dmg`
+files, the Windows `-setup.exe`, and the ffmpeg sources of each platform
+(for the GPL); release notes come from `desktop/RELEASE_NOTES.md`. Running
+the workflow by hand, or pushing to the `desktop-ci` branch, only keeps the
+installers as workflow artifacts.
+
+### Signing
+
+Without signing, macOS gets an ad-hoc signature (the first launch needs
+*Privacy & Security → Open Anyway*) and Windows shows SmartScreen's warning.
+Secrets, when added in the repo settings, are only read by the workflow:
+
+- macOS (Apple Developer Program): `APPLE_CERTIFICATE` (base64 .p12 of a
+  Developer ID Application certificate), `APPLE_CERTIFICATE_PASSWORD`,
+  `APPLE_SIGNING_IDENTITY`, and for notarization `APPLE_ID`,
+  `APPLE_PASSWORD` (an app-specific password) and `APPLE_TEAM_ID`.
+- Windows: not wired up yet; it depends on the certificate chosen
+  (`bundle.windows.signCommand` in `tauri.conf.json`).
 
 ffmpeg is built from source with only what Snapcut uses: x264 (encoding),
 dav1d (YouTube serves 720p as AV1), the hardware H.264 encoders

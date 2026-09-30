@@ -15,7 +15,8 @@ OUT=${OUT:-$(cd "$(dirname "$0")/.." && pwd)/build/quickjs}
 EXE=$([[ $ASSET == *.exe ]] && echo .exe || true)
 rm -rf "$OUT" && mkdir -p "$OUT/bin" "$OUT/licenses"
 curl -fsSL -o "$OUT/bin/qjs$EXE" "https://github.com/quickjs-ng/quickjs/releases/download/$VERSION/$ASSET"
-echo "$SHA256  $OUT/bin/qjs$EXE" | shasum -a 256 -c - >/dev/null || { echo "checksum mismatch: $ASSET" >&2; exit 1; }
+GOT=$( (command -v sha256sum >/dev/null && sha256sum "$OUT/bin/qjs$EXE" || shasum -a 256 "$OUT/bin/qjs$EXE") | cut -d' ' -f1)
+[ "$GOT" = "$SHA256" ] || { echo "checksum mismatch: $ASSET" >&2; exit 1; }
 chmod +x "$OUT/bin/qjs$EXE"
 curl -fsSL -o "$OUT/licenses/quickjs-ng.txt" "https://raw.githubusercontent.com/quickjs-ng/quickjs/$VERSION/LICENSE"
 echo "QuickJS-NG $VERSION ($ASSET)" > "$OUT/BUILD.txt"

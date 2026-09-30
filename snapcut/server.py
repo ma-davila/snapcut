@@ -165,8 +165,9 @@ def main():
     ap.add_argument("--exit-with-stdin", action="store_true",
                     help="quit when stdin closes (the desktop app holds it open)")
     args = ap.parse_args()
-    # The desktop shell reads this output through a pipe.
-    sys.stdout.reconfigure(line_buffering=True)
+    # The desktop shell reads this output through a pipe, as UTF-8.
+    sys.stdout.reconfigure(line_buffering=True, encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
     # One server per data folder. A second one points at the first and quits;
     # the desktop shell reads the same line.

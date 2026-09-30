@@ -5,7 +5,7 @@
 #
 # macOS: run it as is (Xcode command line tools; nasm on Intel).
 # Windows: run it from an MSYS2 MINGW64 shell with
-#   pacman -S git make nasm mingw-w64-x86_64-{gcc,cmake,zlib}
+#   pacman -S git make nasm diffutils mingw-w64-x86_64-{gcc,cmake,zlib,meson,ninja,pkgconf}
 #
 # Output in desktop/build/ffmpeg: bin/ (the programs), licenses/, sources/
 # (everything that went into the binaries, to ship with each release: GPL),
@@ -43,16 +43,17 @@ if [ "$OS" = mac ]; then
 fi
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig
 
-# meson, ninja and pkgconf for the build, kept out of the system.
-if [ ! -x tools/bin/meson ] && [ ! -x tools/Scripts/meson ]; then
-  python3 -m venv tools
-  tools/bin/pip install -q meson ninja pkgconf 2>/dev/null || tools/Scripts/pip install -q meson ninja pkgconf
+# meson, ninja and pkgconf: MSYS2's on Windows; on macOS in a venv, kept out of the system.
+if [ "$OS" = mac ]; then
+  [ -x tools/bin/meson ] || { python3 -m venv tools && tools/bin/pip install -q meson ninja pkgconf; }
+  export PATH=$WORK/tools/bin:$PATH
 fi
-export PATH=$WORK/tools/bin:$WORK/tools/Scripts:$PATH
+
+sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 
 fetch() {  # url file sha256
   [ -f "$2" ] || curl -fsSL -o "$2" "$1"
-  echo "$3  $2" | shasum -a 256 -c - >/dev/null || { echo "checksum mismatch: $2" >&2; exit 1; }
+  [ "$(sha256 "$2")" = "$3" ] || { echo "checksum mismatch: $2" >&2; exit 1; }
   cp "$2" "$OUT/sources/"
 }
 
@@ -90,7 +91,7 @@ else
   cp AMF/LICENSE.txt "$OUT/licenses/amf.txt"
 
   clone https://github.com/intel/libvpl.git libvpl "$LIBVPL_VERSION"
-  cmake -S libvpl -B libvpl/build -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+  cmake -S libvpl -B libvpl/build -G Ninja -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF \
     -DINSTALL_EXAMPLES=OFF -DBUILD_TOOLS=OFF
   cmake --build libvpl/build -j"$JOBS" && cmake --install libvpl/build
@@ -98,7 +99,8 @@ else
 
   HW=(--enable-ffnvcodec --enable-nvenc --enable-encoder=h264_nvenc
       --enable-amf --enable-encoder=h264_amf
-      --enable-libvpl --enable-encoder=h264_qsv --enable-d3d11va --enable-dxva2)
+      --enable-libvpl --enable-encoder=h264_qsv --enable-d3d11va --enable-dxva2
+      --extra-ldflags=-static)  # no MinGW runtime DLLs next to the program
 fi
 
 # --- ffmpeg ---
@@ -115,11 +117,11 @@ CONFIG=(
   --enable-protocol=file,pipe
   --enable-demuxer=mov,aac,h264
   --enable-muxer=mp4,mov,ipod,null,rawvideo,pcm_s16le
-  --enable-decoder=h264,aac,libdav1d,wrapped_avframe
+  --enable-decoder=h264,aac,libdav1d,wrapped_avframe,pcm_s16le
   --enable-encoder=libx264,aac,rawvideo,pcm_s16le,wrapped_avframe
   --enable-parser=h264,aac,av1
   --enable-bsf=aac_adtstoasc,h264_mp4toannexb,extract_extradata,av1_frame_split,av1_frame_merge
-  --enable-filter=trim,atrim,setpts,asetpts,afade,concat,fps,scale,crop,format,aformat,aresample,null,anull,split,asplit,copy,testsrc2
+  --enable-filter=trim,atrim,setpts,asetpts,afade,concat,fps,scale,crop,format,aformat,aresample,null,anull,split,asplit,copy,testsrc2,sine
   --enable-indev=lavfi
   "${HW[@]}"
 )

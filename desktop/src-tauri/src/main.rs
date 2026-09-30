@@ -62,7 +62,7 @@ fn log_path(app: &AppHandle) -> PathBuf {
     let dir = if cfg!(target_os = "macos") {
         app.path().home_dir().unwrap_or_default().join("Library/Logs/Snapcut")
     } else {
-        app.path().local_data_dir().unwrap_or_default().join("Snapcut").join("logs")
+        app.path().local_data_dir().unwrap_or_default().join("Snapcut").join("data").join("logs")
     };
     dir.join("app.log")
 }
@@ -99,11 +99,16 @@ fn start_server(app: &AppHandle) -> Result<(), String> {
 
     let app = app.clone();
     thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            if let Some(url) = line.strip_prefix("Snapcut: ") {
-                server_ready(&app, url.trim().to_string());
+        // Keep reading whatever comes: a stalled pipe would block the server.
+        let mut reader = BufReader::new(stdout);
+        let mut buf = Vec::new();
+        while reader.read_until(b'\n', &mut buf).unwrap_or(0) > 0 {
+            let line = String::from_utf8_lossy(&buf);
+            if let Some(url) = line.trim_end().strip_prefix("Snapcut: ") {
+                server_ready(&app, url.to_string());
             }
-            let _ = writeln!(log, "{line}");
+            let _ = log.write_all(&buf);
+            buf.clear();
         }
         if !app.state::<Server>().quitting.load(Ordering::SeqCst) {
             fail(&app, "El servidor de Snapcut se ha cerrado inesperadamente.".into());

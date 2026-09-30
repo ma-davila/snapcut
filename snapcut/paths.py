@@ -2,8 +2,9 @@
 
 Run from a checkout (`uv run snapcut`) everything stays in the repo's data/,
 as before. The packaged app uses the user's data folder instead:
-~/Library/Application Support/Snapcut on macOS, %LOCALAPPDATA%\\Snapcut on
-Windows. SNAPCUT_DATA overrides both.
+~/Library/Application Support/Snapcut on macOS, %LOCALAPPDATA%\\Snapcut\\data
+on Windows (the installer puts the program itself in %LOCALAPPDATA%\\Snapcut).
+SNAPCUT_DATA overrides both.
 """
 import os
 import sys
@@ -19,7 +20,7 @@ def user_dir():
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / APP
     if sys.platform == "win32":
-        return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / APP
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / APP / "data"
     return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / APP.lower()
 
 
