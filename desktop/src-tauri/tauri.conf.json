@@ -29,7 +29,6 @@
     "shortDescription": "Resúmenes de la NFL sin spoilers, solo las jugadas",
     "copyright": "Snapcut contributors. GPL-3.0-or-later.",
     "license": "GPL-3.0-or-later",
-    "licenseFile": "../../LICENSE",
     "macOS": {
       "minimumSystemVersion": "11.0"
     },
