@@ -16,11 +16,10 @@ DATA = Path(__file__).resolve().parent.parent / "data"
 NETWORK_HINTS = {"CBS": "cbs", "FOX": "fox", "NBC": "nbc", "PRIME VIDEO": "prime",
                  "ESPN": "espn", "ABC": "espn", "ESPN2": "espn"}  # ABC carries ESPN's graphics
 
-# Disk housekeeping. The source is deleted as soon as the cut exists; the cut
-# itself goes 24h after it's first opened, or after a week if it never is. The
-# cut points stay, so making it again only needs the download and the render.
-WATCHED_TTL = 24 * 3600
-UNWATCHED_TTL = 7 * 24 * 3600
+# Disk housekeeping. The source is deleted as soon as the cut exists; cuts are
+# kept for their whole week and cleared when the next week's first game comes
+# in (see autopilot). The cut points stay, so making one again only needs the
+# download and the render.
 STALE_DOWNLOAD_TTL = 2 * 24 * 3600
 PURGE_EVERY = 3600
 
@@ -61,7 +60,6 @@ class Jobs:
         self.state = {}
         self.lock = threading.Lock()
         self.queue = queue.Queue()
-        self.watched = set()
         threading.Thread(target=self._worker, daemon=True).start()
         threading.Thread(target=self._housekeeping, daemon=True).start()
 
@@ -88,19 +86,26 @@ class Jobs:
         info.pop("segments", None)
         if not (self.dir(game_id) / "cut.mp4").exists():
             return {"stage": "expired", "progress": 0.0, **info}
-        if info.get("watched_at"):
-            info["expires_at"] = info["watched_at"] + WATCHED_TTL
         return {"stage": "done", "progress": 1.0, **info}
 
-    def mark_watched(self, game_id):
-        """Start the 24h countdown the first time a cut is opened."""
-        if game_id in self.watched:
+    def busy(self, game_id):
+        with self.lock:
+            return self.state.get(game_id, {}).get("stage") in ("queued", "downloading", "analyzing", "rendering")
+
+    def purge_weeks(self, keep):
+        """Delete the cuts of every week but `keep` ([season, seasontype, week])."""
+        if not DATA.exists():
             return
-        info = self._meta(game_id)
-        if info and not info.get("watched_at"):
-            info["watched_at"] = round(time.time())
-            self._write_meta(game_id, info)
-        self.watched.add(game_id)
+        for d in DATA.iterdir():
+            cut_mp4 = d / "cut.mp4"
+            if not cut_mp4.exists() or self.busy(d.name):
+                continue
+            info = self._meta(d.name) or {}
+            if info.get("week") != list(keep):
+                cut_mp4.unlink(missing_ok=True)
+                print(f"purged cut of {d.name} (week {info.get('week')})")
+                with self.lock:
+                    self.state.pop(d.name, None)
 
     def purge(self, now=None):
         now = now or time.time()
@@ -109,22 +114,11 @@ class Jobs:
         for d in DATA.iterdir():
             if not d.is_dir():
                 continue
-            with self.lock:
-                busy = self.state.get(d.name, {}).get("stage") in ("queued", "downloading", "analyzing", "rendering")
-            if busy:
+            if self.busy(d.name):
                 continue
             cut_mp4, src = d / "cut.mp4", d / "src.mp4"
-            info = self._meta(d.name) or {}
             if cut_mp4.exists():
                 src.unlink(missing_ok=True)
-                made = info.get("cut_at") or cut_mp4.stat().st_mtime
-                watched = info.get("watched_at")
-                if (watched and now - watched > WATCHED_TTL) or (not watched and now - made > UNWATCHED_TTL):
-                    cut_mp4.unlink(missing_ok=True)
-                    info.pop("watched_at", None)
-                    self._write_meta(d.name, info)
-                    self.watched.discard(d.name)
-                    print(f"purged cut of {d.name}")
             # Leftovers of failed or interrupted jobs.
             for f in d.iterdir():
                 if f.name in ("cut.json", "cut.mp4"):
@@ -154,12 +148,12 @@ class Jobs:
             t += b - a
         return {"starts": starts, "duration": round(t, 3)}
 
-    def submit(self, game_id, video_id, network=None):
+    def submit(self, game_id, video_id, network=None, week=None):
         current = self.status(game_id)
         if current and current["stage"] not in ("error", "expired"):
             return current
         self._set(game_id, stage="queued", progress=0.0, error=None, fast=False)
-        self.queue.put((game_id, video_id, network))
+        self.queue.put((game_id, video_id, network, week))
         return self.status(game_id)
 
     def _set(self, game_id, stage=None, frac=None, **extra):
@@ -176,16 +170,16 @@ class Jobs:
 
     def _worker(self):
         while True:
-            game_id, video_id, network = self.queue.get()
+            game_id, video_id, network, week = self.queue.get()
             try:
-                self._run(game_id, video_id, network)
+                self._run(game_id, video_id, network, week)
             except Exception as e:
                 traceback.print_exc()
                 self._set(game_id, stage="error", error=str(e) or type(e).__name__)
             finally:
                 self.queue.task_done()
 
-    def _run(self, game_id, video_id, network):
+    def _run(self, game_id, video_id, network, week=None):
         d = self.dir(game_id)
         d.mkdir(parents=True, exist_ok=True)
         src = d / "src.mp4"
@@ -238,8 +232,8 @@ class Jobs:
             "video_id": video_id,
             "took": round(time.time() - started),
             "cut_at": round(time.time()),
+            "week": list(week) if week else (previous or {}).get("week"),
         }
         self._write_meta(game_id, {**info, "segments": result["segments"]})
-        self.watched.discard(game_id)
         src.unlink(missing_ok=True)
         self._set(game_id, stage="done", progress=1.0, **info)

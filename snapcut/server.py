@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import cuts, games
+from .autopilot import Autopilot
 from .jobs import NETWORK_HINTS, Jobs
 
 STATIC = Path(__file__).parent / "static"
@@ -15,13 +16,17 @@ STATIC = Path(__file__).parent / "static"
 # Where the "buy me a coffee" links point. Empty hides them.
 DONATE_URL = os.environ.get("SNAPCUT_DONATE_URL", "https://github.com/sponsors/ma-davila")
 
+# Cut finished games in the background; SNAPCUT_AUTO=0 turns it off.
+AUTO = os.environ.get("SNAPCUT_AUTO", "1") != "0"
+
 app = FastAPI(title="snapcut")
 jobs = Jobs()
+autopilot = Autopilot(jobs) if AUTO else None
 
 
 @app.get("/api/config")
 def config():
-    return {"donate_url": DONATE_URL or None}
+    return {"donate_url": DONATE_URL or None, "auto": AUTO}
 
 
 @app.get("/api/week")
@@ -47,11 +52,12 @@ def week(season: int | None = None, seasontype: int | None = None, week: int | N
 class Generate(BaseModel):
     video_id: str
     network: str | None = None
+    week: list[int] | None = None  # [season, seasontype, week]
 
 
 @app.post("/api/games/{game_id}/generate")
 def generate(game_id: str, body: Generate):
-    return jobs.submit(game_id, body.video_id, body.network)
+    return jobs.submit(game_id, body.video_id, body.network, body.week)
 
 
 @app.get("/api/games/{game_id}/job")
@@ -72,7 +78,6 @@ def media(game_id: str):
     path = jobs.dir(game_id) / "cut.mp4"
     if not game_id.isdigit() or not path.exists():
         raise HTTPException(404)
-    jobs.mark_watched(game_id)
     return FileResponse(path, media_type="video/mp4")
 
 

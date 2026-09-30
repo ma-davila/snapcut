@@ -167,7 +167,6 @@ function renderAction(el, g) {
   if (job.stage === "done") {
     box.append(button("btn dark", `Ver vídeo (${mmss(job.kept)})`, () => play(g)));
     box.append(text("muted", `${job.plays} jugadas, de ${mmss(job.original)}`));
-    if (job.expires_at) box.append(text("muted small", `Disponible hasta ${until(job.expires_at)}`));
     return;
   }
   if (job.stage === "expired") {
@@ -189,17 +188,6 @@ function renderAction(el, g) {
     job.stage === "downloading" || job.stage === "rendering" ? `${Math.round(job.progress * 100)}%` : "";
   $(".fill", p).style.width = `${Math.round(job.progress * 100)}%`;
   box.append(p);
-}
-
-// "mañana a las 22:10", "el jueves a las 9:05"
-function until(epoch) {
-  const d = new Date(epoch * 1000);
-  const time = d.toLocaleTimeString("es-ES", { hour: "numeric", minute: "2-digit" });
-  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diff = Math.round((day(d) - day(new Date())) / 86400000);
-  if (diff <= 0) return `hoy a las ${time}`;
-  if (diff === 1) return `mañana a las ${time}`;
-  return `el ${d.toLocaleDateString("es-ES", { weekday: "long" })} a las ${time}`;
 }
 
 function text(cls, s) {
@@ -230,12 +218,35 @@ async function generate(g) {
   const r = await fetch(`/api/games/${g.id}/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ video_id: g.video.id, network: g.network }),
+    body: JSON.stringify({
+      video_id: g.video.id,
+      network: g.network,
+      week: [data.season, data.seasontype, data.week],
+    }),
   });
   g.job = await r.json();
   refreshCard(g);
   poll();
 }
+
+// Games cut in the background show up without a reload.
+async function refreshJobs() {
+  if (!data || document.hidden) return;
+  const q = new URLSearchParams({ season: data.season, seasontype: data.seasontype, week: data.week });
+  try {
+    const fresh = await (await fetch(`/api/week?${q}`)).json();
+    for (const f of fresh.games) {
+      const g = data.games.find((x) => x.id === f.id);
+      if (!g) continue;
+      const before = JSON.stringify([g.job?.stage, g.video?.id, g.state]);
+      Object.assign(g, { job: f.job, video: f.video, cuts: f.cuts, state: f.state });
+      if (JSON.stringify([g.job?.stage, g.video?.id, g.state]) !== before) refreshCard(g);
+    }
+    poll();
+  } catch {}
+}
+setInterval(refreshJobs, 60_000);
+document.addEventListener("visibilitychange", refreshJobs);
 
 function refreshCard(g) {
   const el = days.querySelector(`.card[data-id="${g.id}"]`);

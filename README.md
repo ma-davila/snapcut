@@ -34,6 +34,28 @@ uv run snapcut-cut "https://www.youtube.com/watch?v=..." -o cut.mp4
 
 Requires `ffmpeg` on the PATH (the renderer uses `h264_videotoolbox`, so macOS).
 
+## Background mode
+
+While the app runs, it checks every 15 minutes for finished games of the
+current week whose highlights are out, and cuts them on its own, one at a
+time. It prefers published cut points (download + render, under a minute) and
+waits up to an hour for them before analysing locally. Set `SNAPCUT_AUTO=0`
+to turn it off.
+
+To keep it running without a terminal, start it at login with launchd:
+
+```bash
+uv run snapcut-agent install
+```
+
+`uv run snapcut-agent uninstall` removes it. The log is in
+`~/Library/Logs/Snapcut/app.log`.
+
+Disk: a downloaded video is deleted as soon as its cut exists, and cuts are
+kept for their whole week. When the next week's first game comes in, the
+previous weeks' cuts are deleted (their cut points stay, so "Volver a
+generar" is fast). At most one week of cuts, about 2–3 GB, sits in `data/`.
+
 ## How the cut works
 
 The scorebug's play clock tells when a play is live:
@@ -165,7 +187,9 @@ Per-network calibration notes, results and known issues:
 - `snapcut/extract.py` – per-network scorebug layouts and frame sampling
 - `snapcut/whistle.py` – referee whistle detection
 - `snapcut/games.py` – ESPN schedule and YouTube video matching
-- `snapcut/jobs.py` – background download/cut queue
+- `snapcut/jobs.py` – background download/cut queue and disk housekeeping
+- `snapcut/autopilot.py` – cuts finished games on its own, clears past weeks
+- `snapcut/agent.py` – launchd agent to run the app at login
 - `snapcut/cuts.py` – client for the published cut points
 - `snapcut/publish.py` – analyses finished games and publishes their cut points
 - `snapcut/server.py`, `snapcut/static/` – the web app
