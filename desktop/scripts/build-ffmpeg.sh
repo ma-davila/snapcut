@@ -57,11 +57,13 @@ fetch() {  # url file sha256
   cp "$2" "$OUT/sources/"
 }
 
-clone() {  # url dir ref (tag or commit), shallow; shipped as a tarball of that tree
-  [ -d "$2/.git" ] || git init -q "$2"
-  git -C "$2" fetch -q --depth 1 "$1" "$3"
-  git -C "$2" checkout -q --force FETCH_HEAD
-  git -C "$2" archive --prefix="$2/" -o "$OUT/sources/$2.tar.gz" HEAD
+clone() {  # url dir ref [paths]: shallow; shipped as a tarball of that tree (or of the paths used)
+  local url=$1 dir=$2 ref=$3
+  shift 3
+  [ -d "$dir/.git" ] || git init -q "$dir"
+  git -C "$dir" fetch -q --depth 1 "$url" "$ref"
+  git -C "$dir" checkout -q --force FETCH_HEAD
+  git -C "$dir" archive --prefix="$dir/" -o "$OUT/sources/$dir.tar.gz" HEAD "$@"
 }
 
 # --- x264 ---
@@ -86,7 +88,8 @@ else
   make -C nv-codec-headers PREFIX="$PREFIX" install
   head -n 26 nv-codec-headers/include/ffnvcodec/nvEncodeAPI.h > "$OUT/licenses/nv-codec-headers.txt"
 
-  clone https://github.com/GPUOpen-LibrariesAndSDKs/AMF.git AMF "$AMF_VERSION"
+  # Only its headers go into ffmpeg; the repository also carries samples and binaries.
+  clone https://github.com/GPUOpen-LibrariesAndSDKs/AMF.git AMF "$AMF_VERSION" amf/public/include LICENSE.txt
   mkdir -p "$PREFIX/include/AMF" && cp -r AMF/amf/public/include/* "$PREFIX/include/AMF/"
   cp AMF/LICENSE.txt "$OUT/licenses/amf.txt"
 
