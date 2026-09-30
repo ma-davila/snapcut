@@ -12,6 +12,15 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlFRDk5NUM5QzhEMkUyMjcKUldRbjR0TEl5Wlhabm8ySWlvNmx6UnQrdWRGOHJVdkdIc2ZOamR5SkdpODdPdDAvdzYzbkJ6UVYK",
+      "endpoints": ["https://github.com/ma-davila/snapcut/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["app", "dmg", "nsis"],

@@ -353,6 +353,10 @@ $("#about-open").addEventListener("click", async () => {
 
 fetch("/api/config").then((r) => r.json()).then((c) => {
   if (c.version) $("#about-version").textContent = `versión ${c.version}`;
+  if (c.ytdlp) {
+    $("#about-ytdlp").textContent = `Descarga los vídeos con yt-dlp ${c.ytdlp}, que se actualiza solo.`;
+    $("#about-ytdlp").hidden = false;
+  }
   donateUrl = c.donate_url;
   if (!donateUrl) return;
   const a = $("#donate");

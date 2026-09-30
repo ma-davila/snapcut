@@ -6,7 +6,7 @@ import time
 import traceback
 from pathlib import Path
 
-from . import cut, cuts, ytdl
+from . import cut, cuts, ytdl, ytupdate
 from .paths import DATA
 
 # ESPN broadcast name -> scorebug preset, used when the logo match is unsure.
@@ -23,6 +23,7 @@ PURGE_EVERY = 3600
 # Share of the progress bar each stage takes.
 STAGES = {"queued": (0.0, 0.0), "downloading": (0.0, 0.45), "analyzing": (0.45, 0.65),
           "rendering": (0.65, 1.0), "done": (1.0, 1.0)}
+ACTIVE = ("queued", "downloading", "analyzing", "rendering")
 # With the cut points known up front there's no analysis stage.
 FAST_STAGES = {**STAGES, "downloading": (0.0, 0.6), "rendering": (0.6, 1.0)}
 
@@ -60,6 +61,7 @@ class Jobs:
         # Finished cuts, for the desktop app's notifications: team names only.
         self.events = []
         self.seq = 0
+        self.boot = time.time_ns()  # tells a restarted server apart
 
     def start(self):
         threading.Thread(target=self._worker, daemon=True).start()
@@ -96,7 +98,12 @@ class Jobs:
 
     def busy(self, game_id):
         with self.lock:
-            return self.state.get(game_id, {}).get("stage") in ("queued", "downloading", "analyzing", "rendering")
+            return self.state.get(game_id, {}).get("stage") in ACTIVE
+
+    def active(self):
+        """Whether anything is queued or being cut."""
+        with self.lock:
+            return any(s.get("stage") in ACTIVE for s in self.state.values())
 
     def purge_weeks(self, keep):
         """Delete the cuts of every week but `keep` ([season, seasontype, week])."""
@@ -150,7 +157,7 @@ class Jobs:
 
     def ready_since(self, seq):
         with self.lock:
-            return {"seq": self.seq, "ready": [e for e in self.events if e["seq"] > seq]}
+            return {"boot": self.boot, "seq": self.seq, "ready": [e for e in self.events if e["seq"] > seq]}
 
     def submit(self, game_id, video_id, network=None, week=None, teams=None):
         current = self.status(game_id)
@@ -179,6 +186,7 @@ class Jobs:
                 self._run(game_id, video_id, network, week, teams)
             except Exception as e:
                 traceback.print_exc()
+                ytupdate.failed(e)
                 self._set(game_id, stage="error", error=str(e) or type(e).__name__)
             finally:
                 self.queue.task_done()

@@ -12,7 +12,7 @@ import threading
 import time
 import traceback
 
-from . import cuts, games, settings
+from . import cuts, games, settings, ytupdate
 from .jobs import NETWORK_HINTS
 from .paths import DATA
 
@@ -77,8 +77,9 @@ class Autopilot:
             try:
                 if settings.load()["auto"]:
                     self.run_once()
-            except Exception:
+            except Exception as e:
                 traceback.print_exc()
+                ytupdate.failed(e)
             # Switching it on (see server) runs a round right away.
             self.wake.wait(EVERY)
             self.wake.clear()

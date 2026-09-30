@@ -22,11 +22,17 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_updater::UpdaterExt;
 
 // Passed by the login item: start in the menu bar, without the window.
 const HIDDEN: &str = "--hidden";
 const POLL: Duration = Duration::from_secs(15);
 const MAX_LOG: u64 = 5_000_000;
+// The server exits with this when it wants to be started again (a newer yt-dlp).
+const RESTART: i32 = 75;
+const UPDATE_FIRST: Duration = Duration::from_secs(120);
+const UPDATE_EVERY: Duration = Duration::from_secs(6 * 3600);
+const IDLE_POLL: Duration = Duration::from_secs(60);
 
 #[derive(Default)]
 struct Server {
@@ -34,6 +40,7 @@ struct Server {
     // Holding stdin keeps the server alive (--exit-with-stdin).
     child: Mutex<Option<(Child, ChildStdin)>>,
     quitting: AtomicBool,
+    watching: AtomicBool,
 }
 
 struct Tray {
@@ -76,6 +83,12 @@ fn open_log(app: &AppHandle) -> std::io::Result<File> {
     OpenOptions::new().create(true).append(true).open(path)
 }
 
+fn log_line(app: &AppHandle, message: &str) {
+    if let Ok(mut log) = open_log(app) {
+        let _ = writeln!(log, "{message}");
+    }
+}
+
 // ---------- server ----------
 
 fn start_server(app: &AppHandle) -> Result<(), String> {
@@ -110,7 +123,17 @@ fn start_server(app: &AppHandle) -> Result<(), String> {
             let _ = log.write_all(&buf);
             buf.clear();
         }
-        if !app.state::<Server>().quitting.load(Ordering::SeqCst) {
+        let state = app.state::<Server>();
+        let code = state.child.lock().unwrap().as_mut().and_then(|(c, _)| c.wait().ok()).and_then(|s| s.code());
+        if state.quitting.load(Ordering::SeqCst) {
+            return;
+        }
+        if code == Some(RESTART) {
+            let _ = writeln!(log, "starting the server again");
+            if let Err(e) = start_server(&app) {
+                fail(&app, e);
+            }
+        } else {
             fail(&app, "El servidor de Snapcut se ha cerrado inesperadamente.".into());
         }
     });
@@ -118,14 +141,20 @@ fn start_server(app: &AppHandle) -> Result<(), String> {
 }
 
 fn server_ready(app: &AppHandle, url: String) {
-    *app.state::<Server>().url.lock().unwrap() = Some(url.clone());
-    if let (Some(window), Ok(target)) = (app.get_webview_window("main"), url.parse::<Url>()) {
-        let _ = window.navigate(target);
+    let state = app.state::<Server>();
+    let previous = state.url.lock().unwrap().replace(url.clone());
+    // After a restart on the same address the page just carries on.
+    if previous.as_deref() != Some(url.as_str()) {
+        if let (Some(window), Ok(target)) = (app.get_webview_window("main"), url.parse::<Url>()) {
+            let _ = window.navigate(target);
+        }
     }
     if let Some(config) = get_json(&format!("{url}/api/config")) {
         let _ = app.state::<Tray>().auto.set_checked(config["auto"].as_bool().unwrap_or(true));
     }
-    watch_ready(app.clone(), url);
+    if !state.watching.swap(true, Ordering::SeqCst) {
+        watch_ready(app.clone());
+    }
 }
 
 fn stop_server(app: &AppHandle) {
@@ -158,17 +187,27 @@ fn fail(app: &AppHandle, message: String) {
 // ---------- notifications ----------
 
 // A cut finished: say which game, never how it went.
-fn watch_ready(app: AppHandle, url: String) {
+fn watch_ready(app: AppHandle) {
     thread::spawn(move || {
-        let mut seq = None;
+        // (server boot, last event seen); a new boot means a restarted server.
+        let mut seen: Option<(u64, u64)> = None;
         loop {
-            if let Some(reply) = get_json(&format!("{url}/api/ready?after={}", seq.unwrap_or(0))) {
-                if seq.is_some() {
-                    for event in reply["ready"].as_array().into_iter().flatten() {
-                        notify(&app, event["teams"].as_str());
+            if let Some(url) = server_url(&app) {
+                let after = seen.map_or(0, |s| s.1);
+                if let Some(mut reply) = get_json(&format!("{url}/api/ready?after={after}")) {
+                    let boot = reply["boot"].as_u64().unwrap_or(0);
+                    let restarted = seen.is_some_and(|s| s.0 != boot);
+                    if restarted {
+                        // Everything since it started is new to us.
+                        reply = get_json(&format!("{url}/api/ready?after=0")).unwrap_or(reply);
                     }
+                    if seen.is_some() {
+                        for event in reply["ready"].as_array().into_iter().flatten() {
+                            notify(&app, event["teams"].as_str());
+                        }
+                    }
+                    seen = Some((boot, reply["seq"].as_u64().unwrap_or(0)));
                 }
-                seq = reply["seq"].as_u64().or(seq);
             }
             thread::sleep(POLL);
         }
@@ -188,6 +227,62 @@ fn notify(app: &AppHandle, teams: Option<&str>) {
         None => "Tu partido ya se puede ver.".into(),
     };
     let _ = app.notification().builder().title("Partido listo").body(body).show();
+}
+
+// ---------- app updates ----------
+
+// Written just before installing an update: the next start is quiet (menu
+// bar only) and says which version it is.
+fn update_marker(app: &AppHandle) -> PathBuf {
+    app.path().app_local_data_dir().unwrap_or_default().join("updated")
+}
+
+// An update may only interrupt nothing: no cut under way, window closed.
+fn idle(app: &AppHandle) -> bool {
+    let window_open = app.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false));
+    let busy = server_url(app)
+        .and_then(|url| get_json(&format!("{url}/api/status")))
+        .map_or(true, |s| s["busy"].as_bool().unwrap_or(true));
+    !window_open && !busy
+}
+
+async fn update_app(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let mut builder = app.updater_builder();
+    // For testing against a local server; releases use tauri.conf.json's endpoint.
+    if let Ok(url) = std::env::var("SNAPCUT_UPDATE_URL") {
+        builder = builder.endpoints(vec![url.parse()?])?;
+    }
+    let Some(update) = builder.build()?.check().await? else { return Ok(()) };
+    log_line(app, &format!("downloading Snapcut {}", update.version));
+    let bytes = update.download(|_, _| {}, || {}).await?;
+    log_line(app, &format!("Snapcut {} downloaded, waiting until idle", update.version));
+    while !idle(app) {
+        thread::sleep(IDLE_POLL);
+    }
+    let marker = update_marker(app);
+    fs::create_dir_all(marker.parent().unwrap())?;
+    fs::write(&marker, &update.version)?;
+    // Its files are about to be replaced. On Windows install() hands over to
+    // the installer, which starts the new version.
+    stop_server(app);
+    let installed = update.install(bytes);
+    if installed.is_err() {
+        let _ = fs::remove_file(&marker);
+    }
+    app.request_restart();
+    Ok(installed?)
+}
+
+fn watch_updates(app: AppHandle) {
+    thread::spawn(move || {
+        thread::sleep(UPDATE_FIRST);
+        loop {
+            if let Err(e) = tauri::async_runtime::block_on(update_app(&app)) {
+                log_line(&app, &format!("update check failed: {e}"));
+            }
+            thread::sleep(UPDATE_EVERY);
+        }
+    });
 }
 
 // ---------- window ----------
@@ -375,6 +470,7 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Server::default())
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -385,7 +481,18 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
             build_tray(&handle)?;
-            if std::env::args().any(|a| a == HIDDEN) {
+            let updated = fs::read_to_string(update_marker(&handle)).ok();
+            let _ = fs::remove_file(update_marker(&handle));
+            let version = handle.package_info().version.to_string();
+            if updated.as_deref().map(str::trim) == Some(version.as_str()) {
+                let _ = handle
+                    .notification()
+                    .builder()
+                    .title("Snapcut se ha actualizado")
+                    .body(format!("Ya tienes la versión {version}."))
+                    .show();
+            }
+            if updated.is_some() || std::env::args().any(|a| a == HIDDEN) {
                 #[cfg(target_os = "macos")]
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             } else {
@@ -394,6 +501,7 @@ fn main() {
             if let Err(e) = start_server(&handle) {
                 fail(&handle, e);
             }
+            watch_updates(handle);
             Ok(())
         })
         .build(tauri::generate_context!())

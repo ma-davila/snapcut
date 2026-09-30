@@ -16,6 +16,7 @@ datas = [
     (os.path.join(BUILD, "THIRD_PARTY_LICENSES.txt"), "."),
     *collect_data_files("yt_dlp_ejs"),
     *copy_metadata("snapcut"),  # version shown in "Acerca de"
+    *copy_metadata("yt-dlp"),   # bundled version, compared with downloaded ones
 ]
 
 a = Analysis(

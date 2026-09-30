@@ -18,9 +18,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { runner: macos-15, platform: macos-arm64, bundle: dmg }
-          - { runner: macos-15-intel, platform: macos-x64, bundle: dmg }
-          - { runner: windows-2025, platform: windows-x64, bundle: nsis }
+          - { runner: macos-15, platform: macos-arm64, bundle: dmg, arch: aarch64 }
+          - { runner: macos-15-intel, platform: macos-x64, bundle: dmg, arch: x64 }
+          - { runner: windows-2025, platform: windows-x64, bundle: nsis, arch: x64 }
     runs-on: ${{ matrix.runner }}
     defaults:
       run:
@@ -88,20 +88,36 @@ jobs:
           SECRET_APPLE_ID: ${{ secrets.APPLE_ID }}
           SECRET_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SECRET_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Signs the app's own updates (desktop/scripts, README): without it
+          # the release has no update files and installed apps don't update.
+          SECRET_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           # Tauri treats a set-but-empty variable as set: export only real secrets.
-          for name in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+          for name in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID TAURI_SIGNING_PRIVATE_KEY; do
             value=$(printenv "SECRET_$name" || true)
             [ -n "$value" ] && export "$name=$value"
           done
           export APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--}
+          config='{}'
+          if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+            config='{"bundle":{"createUpdaterArtifacts":true}}'
+          fi
           npm ci
-          npx tauri build --bundles ${{ matrix.bundle }}
+          npx tauri build --bundles ${{ matrix.bundle }} --config "$config"
 
       - name: Collect
         run: |
           mkdir -p out
-          cp desktop/src-tauri/target/release/bundle/${{ matrix.bundle }}/*.{dmg,exe} out/ 2>/dev/null || true
+          bundle=desktop/src-tauri/target/release/bundle
+          version=$(jq -r .version desktop/src-tauri/tauri.conf.json)
+          cp $bundle/${{ matrix.bundle }}/*.{dmg,exe} out/ 2>/dev/null || true
+          cp $bundle/nsis/*.exe.sig out/ 2>/dev/null || true
+          # The macOS update bundle has no arch in its name; give it one.
+          if [ -f $bundle/macos/Snapcut.app.tar.gz.sig ]; then
+            cp $bundle/macos/Snapcut.app.tar.gz out/Snapcut_${version}_${{ matrix.arch }}.app.tar.gz
+            cp $bundle/macos/Snapcut.app.tar.gz.sig out/Snapcut_${version}_${{ matrix.arch }}.app.tar.gz.sig
+          fi
           tar -czf out/ffmpeg-sources-${{ matrix.platform }}.tar.gz -C desktop/build/ffmpeg sources BUILD.txt
           ls -l out
 
@@ -123,6 +139,12 @@ jobs:
         with:
           path: out
           merge-multiple: true
+      - name: Update manifest
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          python3 desktop/scripts/latest-json.py "$version" out \
+            "https://github.com/${{ github.repository }}/releases/download/$GITHUB_REF_NAME" \
+            || echo "::warning::no signed update files (TAURI_SIGNING_PRIVATE_KEY): installed apps won't update to this release"
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}

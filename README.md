@@ -114,10 +114,46 @@ git commit -am "Snapcut 0.2.0" && git tag v0.2.0 && git push --follow-tags
 ```
 
 The tag builds everything and creates a **draft** release with the `.dmg`
-files, the Windows `-setup.exe`, and the ffmpeg sources of each platform
-(for the GPL); release notes come from `desktop/RELEASE_NOTES.md`. Running
+files, the Windows `-setup.exe`, the ffmpeg sources of each platform (for
+the GPL), and the signed update files with their `latest.json` (see
+Updates); release notes come from `desktop/RELEASE_NOTES.md`. Running
 the workflow by hand, or pushing to the `desktop-ci` branch, only keeps the
 installers as workflow artifacts.
+
+### Updates
+
+The app updates itself from GitHub Releases, and yt-dlp separately, since
+YouTube breaks it every few weeks:
+
+- **The app** (Tauri's updater): 2 minutes after starting and every 6
+  hours it reads `latest.json` from the latest published release, downloads
+  the update for its platform and checks its signature against the public
+  key in `tauri.conf.json`. It installs it once nothing is being cut and the
+  window is closed, and starts again in the menu bar with a notification.
+  Drafts aren't seen: an update goes out when its release is published.
+- **yt-dlp** (`snapcut/ytupdate.py`): every 12 hours, and soon after yt-dlp
+  fails (at most hourly), the server looks at yt-dlp's latest release. A
+  newer official `yt-dlp` file (pure Python, with its YouTube scripts) goes
+  to `<data>/yt-dlp`, checked against GitHub's digest and the release's
+  `SHA2-256SUMS`. When nothing is being cut, the server exits with status 75
+  and the app starts it again, now loading the newest of the bundled and the
+  downloaded yt-dlp (`snapcut/ytdl.py`). If a download doesn't load, it's
+  set aside and the bundled copy is used. The two newest downloads are kept.
+  Off in a checkout (`SNAPCUT_YTDLP_UPDATE=1` turns it on;
+  `SNAPCUT_YTDLP_REPO=yt-dlp/yt-dlp-nightly-builds` tests it against
+  nightlies).
+
+The updates are signed with a key of their own, not the platform signing
+below: the private key is the repo secret `TAURI_SIGNING_PRIVATE_KEY`
+(without it, releases carry no update files and installed apps stay as they
+are). **Losing it means installed apps can't be updated any more**, so keep a
+backup. A new one is made with `npx tauri signer generate`, and its public
+key goes into `plugins.updater.pubkey`.
+
+To try an update locally, build the app with
+`--config '{"plugins":{"updater":{"dangerousInsecureTransportProtocol":true}}}'`,
+serve a `latest.json` made with `desktop/scripts/latest-json.py`, and start
+the app with `SNAPCUT_UPDATE_URL=http://127.0.0.1:<port>/latest.json`.
 
 ### Signing
 
@@ -282,6 +318,7 @@ Per-network calibration notes, results and known issues:
 - `snapcut/paths.py` – data and log folders, single-instance lock
 - `snapcut/settings.py` – saved settings (background mode on/off)
 - `snapcut/tools.py`, `snapcut/ytdl.py` – ffmpeg, encoder choice, yt-dlp setup
+- `snapcut/ytupdate.py` – keeps yt-dlp up to date
 - `desktop/` – desktop app: Tauri shell (`src-tauri`), packaged server, build scripts
 - `snapcut/publish.py` – analyses finished games and publishes their cut points
 - `snapcut/server.py`, `snapcut/static/` – the web app

@@ -6,6 +6,7 @@ import os
 import socket
 import sys
 import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import cuts, games, paths, settings
+from . import cuts, games, paths, settings, ytdl, ytupdate
 from .autopilot import Autopilot
 from .jobs import NETWORK_HINTS, Jobs
 
@@ -27,6 +28,9 @@ DONATE_URL = os.environ.get("SNAPCUT_DONATE_URL", "https://github.com/sponsors/m
 # Shipped inside the packaged app; in a checkout, after desktop/scripts/build-server.sh.
 LICENSES = [Path(getattr(sys, "_MEIPASS", "")) / "THIRD_PARTY_LICENSES.txt",
             paths.REPO / "desktop" / "build" / "THIRD_PARTY_LICENSES.txt"]
+
+# Exit status asking the desktop app to start the server again (a newer yt-dlp).
+RESTART = 75
 
 try:
     VERSION = importlib.metadata.version("snapcut")
@@ -41,6 +45,25 @@ LAST_PORT = paths.DATA / "port"
 
 jobs = Jobs()
 autopilot = None
+uvicorn_server = None
+exit_code = 0
+under_shell = False
+
+
+def restart_when_idle(version):
+    if not under_shell:
+        print(f"restart Snapcut to use yt-dlp {version}")
+        return
+
+    def wait():
+        global exit_code
+        while jobs.active():
+            time.sleep(30)
+        print(f"restarting for yt-dlp {version}")
+        exit_code = RESTART
+        uvicorn_server.should_exit = True
+
+    threading.Thread(target=wait, daemon=True).start()
 
 
 @asynccontextmanager
@@ -48,6 +71,8 @@ async def lifespan(app):
     global autopilot
     jobs.start()
     autopilot = Autopilot(jobs)
+    if ytupdate.ENABLED:
+        ytupdate.Updater(on_new=restart_when_idle)
     yield
 
 
@@ -58,7 +83,13 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost
 
 @app.get("/api/config")
 def config():
-    return {"donate_url": DONATE_URL or None, "version": VERSION, **settings.load()}
+    return {"donate_url": DONATE_URL or None, "version": VERSION, "ytdlp": ytdl.VERSION, **settings.load()}
+
+
+@app.get("/api/status")
+def status():
+    """For the desktop app: whether an update would interrupt a cut."""
+    return {"busy": jobs.active()}
 
 
 class Settings(BaseModel):
@@ -95,7 +126,8 @@ def week(season: int | None = None, seasontype: int | None = None, week: int | N
         raise HTTPException(502, f"No se pudo cargar el calendario de ESPN: {e}")
     try:
         videos = games.channel_videos()
-    except Exception:
+    except Exception as e:
+        ytupdate.failed(e)
         videos = []
     published = cuts.week(data["season"], data["seasontype"], data["week"])
     for g in data["games"]:
@@ -181,9 +213,11 @@ def main():
             print("Snapcut is already starting", file=sys.stderr)
             return 1
 
+    global uvicorn_server, under_shell
     if args.exit_with_stdin:
         # If the desktop app goes away, even without a clean exit, so does the server.
         threading.Thread(target=lambda: (sys.stdin.read(), os._exit(0)), daemon=True).start()
+        under_shell = True
 
     try:
         last = 8765 if paths.DEV else int(LAST_PORT.read_text())
@@ -195,7 +229,10 @@ def main():
     url = f"http://127.0.0.1:{port}"
     running.write_text(json.dumps({"url": url, "pid": os.getpid()}))
     print(f"Snapcut: {url}", flush=True)
+    print(f"yt-dlp {ytdl.VERSION} ({ytdl.SOURCE})", flush=True)
+    uvicorn_server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
     try:
-        uvicorn.Server(uvicorn.Config(app, log_level="warning")).run(sockets=[sock])
+        uvicorn_server.run(sockets=[sock])
     finally:
         running.unlink(missing_ok=True)
+    return exit_code
