@@ -34,7 +34,7 @@ jobs:
           version=$(jq -r .version desktop/src-tauri/tauri.conf.json)
           [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME but app version $version (desktop/scripts/set-version.sh)"; exit 1; }
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
