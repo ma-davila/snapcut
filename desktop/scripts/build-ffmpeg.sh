@@ -98,6 +98,10 @@ else
     -DINSTALL_EXAMPLES=OFF -DBUILD_TOOLS=OFF
   cmake --build libvpl/build -j"$JOBS"
   cmake --install libvpl/build
+  # Its .pc gives paths relative to ${pcfiledir}, which configure doesn't
+  # resolve under MSYS2 (MSYS2's own package patches the same thing).
+  sed -i "s|^prefix=.*|prefix=$PREFIX|; s|^libdir=.*|libdir=\${prefix}/lib|; s|^includedir=.*|includedir=\${prefix}/include|" \
+    "$PREFIX/lib/pkgconfig/vpl.pc"
   cp libvpl/LICENSE "$OUT/licenses/libvpl.txt"
 
   HW=(--enable-ffnvcodec --enable-nvenc --enable-encoder=h264_nvenc
@@ -128,7 +132,7 @@ CONFIG=(
   --enable-indev=lavfi
   "${HW[@]}"
 )
-./configure "${CONFIG[@]}"
+./configure "${CONFIG[@]}" || { tail -n 40 ffbuild/config.log; exit 1; }
 make -j"$JOBS"
 EXE=$([ "$OS" = win ] && echo .exe || true)
 for p in ffmpeg ffprobe; do
