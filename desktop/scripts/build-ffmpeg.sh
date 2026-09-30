@@ -20,7 +20,7 @@ X264_COMMIT=b35605ace3ddf7c1a5d67a2eb553f034aef41d55  # stable branch
 # Windows only: GPU encoder headers (NVIDIA, AMD) and Intel's QSV dispatcher.
 NVCODEC_VERSION=n12.2.72.0  # NVIDIA driver 550+; older ones fall back to another encoder
 AMF_VERSION=v1.4.36
-LIBVPL_VERSION=v2.15.0
+LIBVPL_VERSION=v2.17.0
 
 DESKTOP=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${OUT:-$DESKTOP/build/ffmpeg}
@@ -91,10 +91,13 @@ else
   cp AMF/LICENSE.txt "$OUT/licenses/amf.txt"
 
   clone https://github.com/intel/libvpl.git libvpl "$LIBVPL_VERSION"
+  git -C libvpl apply "$DESKTOP/scripts/patches/libvpl-mingw.patch"
+  cp "$DESKTOP/scripts/patches/libvpl-mingw.patch" "$OUT/sources/"
   cmake -S libvpl -B libvpl/build -G Ninja -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF \
     -DINSTALL_EXAMPLES=OFF -DBUILD_TOOLS=OFF
-  cmake --build libvpl/build -j"$JOBS" && cmake --install libvpl/build
+  cmake --build libvpl/build -j"$JOBS"
+  cmake --install libvpl/build
   cp libvpl/LICENSE "$OUT/licenses/libvpl.txt"
 
   HW=(--enable-ffnvcodec --enable-nvenc --enable-encoder=h264_nvenc

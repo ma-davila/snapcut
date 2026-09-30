@@ -50,7 +50,7 @@ jobs:
         id: ffmpeg
         with:
           path: desktop/build/ffmpeg
-          key: ffmpeg-${{ matrix.platform }}-${{ hashFiles('desktop/scripts/build-ffmpeg.sh') }}
+          key: ffmpeg-${{ matrix.platform }}-${{ hashFiles('desktop/scripts/build-ffmpeg.sh', 'desktop/scripts/patches/**') }}
 
       - name: Build ffmpeg (macOS)
         if: runner.os == 'macOS' && steps.ffmpeg.outputs.cache-hit != 'true'

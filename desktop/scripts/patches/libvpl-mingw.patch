@@ -1,0 +1,13 @@
+The fallbacks for old MSVC also kick in with GCC (no _MSC_VER), where they
+clash with MinGW's own wcscpy_s. Only define them for old MSVC.
+--- a/libvpl/src/windows/mfx_dispatcher_defs.h
++++ b/libvpl/src/windows/mfx_dispatcher_defs.h
+@@ -19,7 +19,7 @@
+ #define MAX_PLUGIN_PATH 4096
+ #define MAX_PLUGIN_NAME 4096
+ 
+-#if _MSC_VER < 1400
++#if defined(_MSC_VER) && _MSC_VER < 1400
+     #define wcscpy_s(to, to_size, from) \
+         (void)(to_size);                \
+         wcscpy(to, from)
