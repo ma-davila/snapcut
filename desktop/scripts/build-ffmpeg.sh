@@ -19,7 +19,7 @@ DAV1D_SHA256=686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5
 X264_COMMIT=b35605ace3ddf7c1a5d67a2eb553f034aef41d55  # stable branch
 # Windows only: GPU encoder headers (NVIDIA, AMD) and Intel's QSV dispatcher.
 NVCODEC_VERSION=n12.2.72.0  # NVIDIA driver 550+; older ones fall back to another encoder
-AMF_VERSION=v1.4.36
+AMF_VERSION=v1.5.3  # ffmpeg 9 needs headers >= 1.5.2
 LIBVPL_VERSION=v2.17.0
 
 DESKTOP=$(cd "$(dirname "$0")/.." && pwd)
