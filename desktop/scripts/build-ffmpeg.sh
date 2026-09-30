@@ -99,8 +99,9 @@ else
   cmake --build libvpl/build -j"$JOBS"
   cmake --install libvpl/build
   # Its .pc gives paths relative to ${pcfiledir}, which configure doesn't
-  # resolve under MSYS2 (MSYS2's own package patches the same thing).
-  sed -i "s|^prefix=.*|prefix=$PREFIX|; s|^libdir=.*|libdir=\${prefix}/lib|; s|^includedir=.*|includedir=\${prefix}/include|" \
+  # resolve under MSYS2 (MSYS2's own package patches the same thing), and
+  # leaves out the C++ runtime a static link needs.
+  sed -i "s|^prefix=.*|prefix=$PREFIX|; s|^libdir=.*|libdir=\${prefix}/lib|; s|^includedir=.*|includedir=\${prefix}/include|; /^Libs:/ s|\$| -lstdc++|" \
     "$PREFIX/lib/pkgconfig/vpl.pc"
   cp libvpl/LICENSE "$OUT/licenses/libvpl.txt"
 
