@@ -38,25 +38,56 @@ function weekLabel(d) {
   }[entry.label] ?? entry.label.replace("Preseason Week", "Pretemporada");
 }
 
+const WEEK_TIMEOUT = 20000; // ESPN gets 15 s on the server; this covers the rest
+
 async function loadWeek(params = {}) {
   const q = new URLSearchParams(params).toString();
+  // On opening the intro stays up until the week is here, so this shows only later.
   $("#week-title").textContent = "Cargando…";
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), WEEK_TIMEOUT);
   try {
-    const r = await fetch(`/api/week${q ? "?" + q : ""}`);
+    if (!navigator.onLine) throw new Error("offline");
+    const r = await fetch(`/api/week${q ? "?" + q : ""}`, { signal: abort.signal });
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
     data = await r.json();
   } catch (e) {
-    days.innerHTML = "";
-    const p = document.createElement("p");
-    p.className = "empty";
-    p.textContent = `No se pudo cargar la semana: ${e.message}. Comprueba la conexión y recarga.`;
-    days.append(p);
-    $("#week-title").textContent = "—";
+    weekFailed(
+      !navigator.onLine ? "No hay conexión a internet. Snapcut lo volverá a intentar en cuanto vuelva."
+      : e.name === "AbortError" ? "La NFL está tardando demasiado en responder. Inténtalo de nuevo en un rato."
+      : `No se pudo cargar la semana: ${e.message}.`,
+      params);
     return;
+  } finally {
+    clearTimeout(timer);
   }
   save("week", { season: data.season, seasontype: data.seasontype, week: data.week });
   render();
+  window.opening?.ready();
   poll();
+}
+
+function weekFailed(message, params) {
+  const again = () => {
+    removeEventListener("online", again);
+    window.opening?.retrying();
+    loadWeek(params);
+  };
+  addEventListener("online", again);
+  if (window.opening) return window.opening.fail(message, again);
+
+  days.innerHTML = "";
+  const p = document.createElement("p");
+  p.className = "empty";
+  p.textContent = message + " ";
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "retry";
+  b.textContent = "Reintentar";
+  b.addEventListener("click", again);
+  p.append(b);
+  days.append(p);
+  $("#week-title").textContent = "—";
 }
 
 function neighbor(step) {

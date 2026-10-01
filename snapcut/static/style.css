@@ -107,6 +107,7 @@ main {
 }
 
 .empty { color: var(--chalk-dim); margin-top: 48px; text-align: center; }
+.empty .retry { margin-left: 8px; }
 
 /* ---------- card ---------- */
 
@@ -577,8 +578,10 @@ video { display: block; width: 100%; max-height: 86vh; background: #000; }
   overflow: hidden;
   background: var(--turf);
 }
-#intro .top { top: 0; animation: part-up 560ms cubic-bezier(.7, 0, .2, 1) 1.45s forwards; }
-#intro .bottom { top: var(--seam); bottom: 0; height: auto; animation: part-down 560ms cubic-bezier(.7, 0, .2, 1) 1.45s forwards; }
+#intro .top { top: 0; }
+#intro .bottom { top: var(--seam); bottom: 0; height: auto; }
+#intro.open .top { animation: part-up 700ms cubic-bezier(.7, 0, .2, 1) 350ms forwards; }
+#intro.open .bottom { animation: part-down 700ms cubic-bezier(.7, 0, .2, 1) 350ms forwards; }
 
 /* The cut line is at y=36 of the 64-unit mark: put it on the seam. */
 #intro .mark {
@@ -586,9 +589,12 @@ video { display: block; width: 100%; max-height: 86vh; background: #000; }
   left: calc(50% - var(--size) / 2);
   width: var(--size);
   height: var(--size);
+  transition: opacity 350ms ease-in;
 }
 #intro .top .mark { top: calc(var(--seam) - var(--size) * 36 / 64); }
 #intro .bottom .mark { top: calc(var(--size) * -36 / 64); }
+/* Between two rounds of the loop the mark fades out before drawing again. */
+#intro.rest .mark { opacity: 0; }
 
 /* The seam: the cut carries on across the whole screen. */
 #intro .seam {
@@ -597,27 +603,21 @@ video { display: block; width: 100%; max-height: 86vh; background: #000; }
   height: 3px;
   left: 50%; right: 50%;
   background: var(--line);
-  animation: seam 260ms ease-out 1.2s forwards, fade 200ms linear 1.55s forwards;
 }
+#intro.open .seam { animation: seam 400ms ease-out forwards, fade 250ms linear 450ms forwards; }
 
-.mark .ball {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: draw 450ms ease-out forwards;
-}
-.mark .stripe { opacity: 0; animation: fade-in 200ms ease-out 300ms forwards; }
-.mark .reveal {
-  width: 0;
-  animation: reveal 750ms linear 450ms forwards;
-}
-.mark .scissors {
-  opacity: 0;
-  transform: translateX(-17px);
-  animation: fade-in 120ms linear 400ms forwards, travel 750ms linear 450ms forwards;
-}
+/* One round of the mark: 1.92s. intro.js repeats it until the page is ready. */
+.mark .ball { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.mark .stripe { opacity: 0; }
+.mark .reveal { width: 0; }
+.mark .scissors { opacity: 0; transform: translateX(-17px); }
 .mark .blade { transform-origin: 44.5px 29.5px; }
-.mark .blade.a { animation: snip-a 250ms ease-in-out 450ms 3; }
-.mark .blade.b { animation: snip-b 250ms ease-in-out 450ms 3; }
+#intro.run .ball { animation: draw 720ms ease-out forwards; }
+#intro.run .stripe { animation: fade-in 320ms ease-out 480ms forwards; }
+#intro.run .reveal { animation: reveal 1200ms linear 720ms forwards; }
+#intro.run .scissors { animation: fade-in 190ms linear 640ms forwards, travel 1200ms linear 720ms forwards; }
+#intro.run .blade.a { animation: snip-a 400ms ease-in-out 720ms 3; }
+#intro.run .blade.b { animation: snip-b 400ms ease-in-out 720ms 3; }
 
 @keyframes draw { to { stroke-dashoffset: 0; } }
 @keyframes fade-in { to { opacity: 1; } }
@@ -630,7 +630,28 @@ video { display: block; width: 100%; max-height: 86vh; background: #000; }
 @keyframes part-up { to { transform: translateY(-100%); } }
 @keyframes part-down { to { transform: translateY(100%); } }
 
-/* Click or key: jump straight to the split. */
+/* Loaded, then a click or key: jump straight to the split. */
 #intro.skip .half, #intro.skip .seam { animation-delay: 0s; animation-duration: 250ms; }
 #intro.skip .mark * { animation: none; opacity: 1; stroke-dashoffset: 0; transform: none; }
 #intro.skip .mark .reveal { width: 16.5px; }
+
+/* The page could not load: the message sits under the mark, on the splash. */
+#intro .fail {
+  position: absolute;
+  top: calc(var(--size) * 28 / 64 + 24px);
+  left: 16px; right: 16px;
+  margin: 0 auto;
+  max-width: 42ch;
+  text-align: center;
+  color: var(--chalk);
+  cursor: default;
+}
+#intro .fail p { margin: 0 0 16px; }
+#intro .fail button, .empty .retry {
+  padding: 8px 18px;
+  border: 0;
+  border-radius: var(--radius-btn);
+  background: var(--line);
+  color: var(--ink);
+  font-weight: 600;
+}
