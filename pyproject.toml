@@ -1,6 +1,6 @@
 [project]
 name = "snapcut"
-version = "0.1.0"
+version = "0.1.1"
 description = "Spoiler-free American football highlights, cut down to live plays only"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
