@@ -23,6 +23,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 desktop = [
+    "certifi>=2026.7.22",  # desktop/server/main.py: CA bundle for the packaged server
     "pyinstaller>=6.22.3",
 ]
 dev = [
